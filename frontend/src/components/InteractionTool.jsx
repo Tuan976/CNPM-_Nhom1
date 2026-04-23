@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeftRight, Pill, Stethoscope, AlertTriangle, CheckCircle, Sparkles } from 'lucide-react';
+import { ArrowLeftRight, Pill, Stethoscope, AlertTriangle, CheckCircle, Sparkles, ChevronRight } from 'lucide-react';
 import axios from 'axios';
 
 const InteractionTool = () => {
@@ -82,7 +82,7 @@ const InteractionTool = () => {
           <div className="p-2 dark:bg-blue-900/50 bg-blue-50 text-blue-500 rounded-lg">
             <ArrowLeftRight size={24} />
           </div>
-          Kiểm tra tương tác thuốc
+          Kiểm tra tương tác & Gợi ý thay thế
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-end">
@@ -94,7 +94,7 @@ const InteractionTool = () => {
               className="w-full p-4 rounded-xl dark:bg-slate-800 bg-slate-50 dark:border-slate-700 border-slate-200 dark:text-white text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none appearance-none transition-colors"
             >
               <option value="">-- Chọn thuốc --</option>
-              {drugs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              {drugs.map(d => <option key={d.id} value={d.id}>{d.name} ({d.ingredients})</option>)}
             </select>
           </div>
 
@@ -130,7 +130,7 @@ const InteractionTool = () => {
               <option value="">-- Chọn mục --</option>
               {targetType === 'drug' 
                 ? drugs.filter(d => d.id !== parseInt(selectedDrug)).map(d => <option key={d.id} value={d.id}>{d.name}</option>)
-                : diseases.map(d => <option key={d.id} value={d.id}>{d.name}</option>)
+                : diseases.map(d => <option key={d.id} value={d.id}>{d.name} ({d.icd10})</option>)
               }
             </select>
           </div>
@@ -146,33 +146,62 @@ const InteractionTool = () => {
       </div>
 
       {result && (
-        <div className={`dark:bg-slate-900 bg-white border p-8 rounded-3xl border-l-8 transition-colors ${result.found ? getSeverityClasses(result.severity) : 'dark:border-slate-800 border-slate-200'}`}>
-          <div className="flex flex-col md:flex-row items-start justify-between gap-6">
-            <div className="flex gap-4">
-              {result.found ? (
-                <AlertTriangle size={32} className="mt-1 flex-shrink-0" />
-              ) : (
-                <CheckCircle size={32} className="text-emerald-500 mt-1 flex-shrink-0" />
+        <div className="space-y-6">
+          <div className={`dark:bg-slate-900 bg-white border p-8 rounded-3xl border-l-8 transition-colors ${result.found ? getSeverityClasses(result.severity) : 'dark:border-slate-800 border-slate-200'}`}>
+            <div className="flex flex-col md:flex-row items-start justify-between gap-6">
+              <div className="flex gap-4">
+                {result.found ? (
+                  <AlertTriangle size={32} className="mt-1 flex-shrink-0" />
+                ) : (
+                  <CheckCircle size={32} className="text-emerald-500 mt-1 flex-shrink-0" />
+                )}
+                <div>
+                  <h3 className="text-2xl font-bold mb-2 dark:text-white">
+                    {result.found ? `Cảnh báo: ${result.severity}` : 'Không tìm thấy tương tác trực tiếp'}
+                  </h3>
+                  <p className="text-lg leading-relaxed dark:text-slate-400 text-slate-600">
+                    {result.found ? result.description : 'Hệ thống không ghi nhận tương tác nào trong cơ sở dữ liệu. Bạn có thể sử dụng AI để phân tích sâu hơn.'}
+                  </p>
+                </div>
+              </div>
+              {!result.found && (
+                <button 
+                  onClick={handleAiAnalyze}
+                  disabled={aiLoading}
+                  className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:shadow-lg transition-all flex-shrink-0"
+                >
+                  <Sparkles size={18} /> {aiLoading ? 'AI đang nghĩ...' : 'Phân tích với AI'}
+                </button>
               )}
-              <div>
-                <h3 className="text-2xl font-bold mb-2 dark:text-white">
-                  {result.found ? `Tương tác: ${result.severity}` : 'Không tìm thấy tương tác trực tiếp'}
-                </h3>
-                <p className="text-lg leading-relaxed dark:text-slate-400 text-slate-600">
-                  {result.found ? result.description : 'Hệ thống không ghi nhận tương tác nào trong cơ sở dữ liệu. Bạn có thể sử dụng AI để phân tích sâu hơn.'}
-                </p>
+            </div>
+          </div>
+
+          {/* Smart Alternatives */}
+          {result.found && result.alternatives && result.alternatives.length > 0 && (
+            <div className="dark:bg-emerald-950/20 bg-emerald-50 border border-emerald-500/30 p-8 rounded-3xl animate-in slide-in-from-top-4">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-emerald-500 text-white rounded-lg">
+                  <CheckCircle size={20} />
+                </div>
+                <h3 className="text-xl font-bold dark:text-emerald-400 text-emerald-700">Gợi ý thay thế an toàn hơn</h3>
+              </div>
+              <p className="text-sm dark:text-emerald-500 text-emerald-600 mb-6">Các loại thuốc dưới đây thuộc cùng nhóm dược lý nhưng chưa ghi nhận tương tác với đối tượng bạn đã chọn:</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {result.alternatives.map((alt) => (
+                  <div key={alt.id} className="dark:bg-slate-900 bg-white p-4 rounded-2xl border dark:border-emerald-500/20 border-emerald-200 flex items-center justify-between group hover:border-emerald-500 transition-all">
+                    <div>
+                      <h4 className="font-bold dark:text-white text-slate-800">{alt.name}</h4>
+                      <p className="text-xs dark:text-slate-500 text-slate-500">{alt.ingredients}</p>
+                    </div>
+                    <div className="text-emerald-500 group-hover:translate-x-1 transition-transform">
+                      <ChevronRight size={20} />
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-            {!result.found && (
-              <button 
-                onClick={handleAiAnalyze}
-                disabled={aiLoading}
-                className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:shadow-lg transition-all flex-shrink-0"
-              >
-                <Sparkles size={18} /> {aiLoading ? 'AI đang nghĩ...' : 'Phân tích với AI'}
-              </button>
-            )}
-          </div>
+          )}
         </div>
       )}
 

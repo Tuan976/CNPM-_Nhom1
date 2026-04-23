@@ -1,334 +1,263 @@
 import os
+import sqlite3
+import requests
 from flask import Flask, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
-from flask_jwt_extended import (
-    JWTManager, create_access_token, jwt_required, get_jwt_identity
-)
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
-import requests as http_requests
-from datetime import timedelta
 
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
-# Database Configuration
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(BASE_DIR, "medical.db")}'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# JWT Configuration
-app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'medicheck-super-secret-key-2026')
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=7)
-
-db = SQLAlchemy(app)
+app.config['JWT_SECRET_KEY'] = 'medicheck-super-secret-key-2026'
 jwt = JWTManager(app)
 
-# AI Configuration - OpenAI-compatible API (beeknoee proxy)
-AI_API_KEY = os.getenv("OPENAI_API_KEY", "sk-bee-ddafa53cb5a14928bf4754d21a58fb9d")
-AI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://platform.beeknoee.com/api/v1")
-AI_MODEL = os.getenv("OPENAI_MODEL", "claude-sonnet-4-6")
+DB_PATH = 'medical_v2.db'
 
-print(f">>> [AI] Configured. Base URL: {AI_BASE_URL}, Model: {AI_MODEL}")
+# --- DATABASE SETUP ---
+def get_db_connection():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
-# ==================== MODELS ====================
+def init_db():
+    conn = get_db_connection()
+    # Users table with specific roles
+    conn.execute('''CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        full_name TEXT NOT NULL,
+        role TEXT DEFAULT 'doctor' -- doctor, pharmacist, admin
+    )''')
+    
+    # Drugs table with generic name and pharmacological group
+    conn.execute('''CREATE TABLE IF NOT EXISTS drugs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL, -- Brand Name
+        ingredients TEXT NOT NULL, -- Generic Name / Active Ingredients
+        indications TEXT,
+        contraindications TEXT,
+        side_effects TEXT,
+        dosage TEXT,
+        pharmacological_group TEXT -- For suggesting alternatives
+    )''')
+    
+    # Diseases table with ICD-10 code
+    conn.execute('''CREATE TABLE IF NOT EXISTS diseases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        icd10 TEXT, -- International Classification of Diseases
+        description TEXT,
+        symptoms TEXT
+    )''')
+    
+    # Interactions table
+    conn.execute('''CREATE TABLE IF NOT EXISTS interactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        drug_id INTEGER,
+        target_type TEXT, -- 'drug' or 'disease'
+        target_id INTEGER,
+        severity TEXT, -- Severe, High, Moderate, Low
+        description TEXT,
+        FOREIGN KEY (drug_id) REFERENCES drugs(id)
+    )''')
+    
+    conn.commit()
+    seed_data(conn)
+    conn.close()
 
-class User(db.Model):
-    __tablename__ = 'users'
-    id = db.Column(db.Integer, primary_key=True)
-    full_name = db.Column(db.String(255), nullable=False)
-    email = db.Column(db.String(255), unique=True, nullable=False)
-    password_hash = db.Column(db.String(512), nullable=False)
-    role = db.Column(db.String(20), default='user')  # 'user' or 'admin'
-    created_at = db.Column(db.DateTime, server_default=db.func.now())
-
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
-
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'full_name': self.full_name,
-            'email': self.email,
-            'role': self.role,
-            'created_at': self.created_at.isoformat() if self.created_at else None
-        }
-
-class Drug(db.Model):
-    __tablename__ = 'drugs'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(255), nullable=False)
-    ingredients = db.Column(db.Text)
-    indications = db.Column(db.Text)
-    contraindications = db.Column(db.Text)
-    dosage = db.Column(db.Text)
-    side_effects = db.Column(db.Text)
-
-class Disease(db.Model):
-    __tablename__ = 'diseases'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(255), nullable=False)
-    description = db.Column(db.Text)
-    symptoms = db.Column(db.Text)
-
-class Interaction(db.Model):
-    __tablename__ = 'interactions'
-    id = db.Column(db.Integer, primary_key=True)
-    drug_id = db.Column(db.Integer, db.ForeignKey('drugs.id'), nullable=False)
-    target_type = db.Column(db.String(10), nullable=False)
-    target_id = db.Column(db.Integer, nullable=False)
-    severity = db.Column(db.String(20), nullable=False)
-    description = db.Column(db.Text)
-
-# ==================== SEED DATA ====================
-
-def seed_data():
-    if Drug.query.count() > 0:
+def seed_data(conn):
+    # Check if data exists
+    if conn.execute('SELECT count(*) FROM drugs').fetchone()[0] > 0:
         return
-    print(">>> Seeding sample data...")
 
-    drugs = [
-        Drug(name='Paracetamol', ingredients='Paracetamol',
-             indications='Giảm đau, hạ sốt nhẹ đến vừa.',
-             contraindications='Mẫn cảm với thành phần thuốc, suy gan nặng.',
-             dosage='500-1000mg mỗi 4-6 giờ. Tối đa 4g/ngày.',
-             side_effects='Ít tác dụng phụ ở liều điều trị. Có thể gây phát ban.'),
-        Drug(name='Ibuprofen', ingredients='Ibuprofen',
-             indications='Giảm đau, kháng viêm, hạ sốt.',
-             contraindications='Loét dạ dày tá tràng tiến triển, suy thận, hen suyễn.',
-             dosage='200-400mg mỗi 4-6 giờ. Uống sau khi ăn.',
-             side_effects='Đau bụng, buồn nôn, ợ nóng.'),
-        Drug(name='Metformin', ingredients='Metformin Hydrochloride',
-             indications='Tiểu đường type 2, đặc biệt ở người thừa cân.',
-             contraindications='Suy thận nặng, suy tim, nhiễm toan ceton.',
-             dosage='500mg-1000mg/ngày, uống cùng bữa ăn.',
-             side_effects='Rối loạn tiêu hóa, chán ăn, vị kim loại trong miệng.'),
-        Drug(name='Aspirin', ingredients='Acetylsalicylic acid',
-             indications='Giảm đau, kháng viêm, dự phòng huyết khối.',
-             contraindications='Loét dạ dày, rối loạn đông máu, trẻ em dưới 16 tuổi.',
-             dosage='75-325mg/ngày (dự phòng), 500mg (giảm đau).',
-             side_effects='Kích ứng dạ dày, tăng nguy cơ chảy máu.'),
-        Drug(name='Amlodipine', ingredients='Amlodipine Besylate',
-             indications='Cao huyết áp, đau thắt ngực.',
-             contraindications='Huyết áp thấp nghiêm trọng, sốc tim.',
-             dosage='5mg-10mg x 1 lần/ngày.',
-             side_effects='Sưng cổ chân, nhức đầu, mệt mỏi.'),
-        Drug(name='Amoxicillin', ingredients='Amoxicillin',
-             indications='Nhiễm khuẩn đường hô hấp, da, tiết niệu.',
-             contraindications='Dị ứng với Penicillin.',
-             dosage='250mg-500mg mỗi 8 giờ.',
-             side_effects='Phát ban, tiêu chảy, buồn nôn.'),
-        Drug(name='Atorvastatin', ingredients='Atorvastatin Calcium',
-             indications='Giảm cholesterol, phòng ngừa tim mạch.',
-             contraindications='Bệnh gan tiến triển, mang thai, cho con bú.',
-             dosage='10-80mg/ngày, uống vào buổi tối.',
-             side_effects='Đau cơ, tăng men gan, đau đầu.'),
-        Drug(name='Omeprazole', ingredients='Omeprazole',
-             indications='Loét dạ dày, trào ngược dạ dày thực quản (GERD).',
-             contraindications='Mẫn cảm với thuốc ức chế bơm proton.',
-             dosage='20-40mg/ngày, uống trước khi ăn 30 phút.',
-             side_effects='Đau đầu, tiêu chảy, buồn nôn.'),
+    # Seed Admin
+    admin_pw = generate_password_hash('admin123')
+    conn.execute('INSERT OR IGNORE INTO users (email, password, full_name, role) VALUES (?, ?, ?, ?)',
+                 ('admin@medicheck.vn', admin_pw, 'Quản trị viên', 'admin'))
+    
+    # Seed Drugs with Pharmacological Groups
+    drugs_data = [
+        ('Paracetamol 500mg', 'Paracetamol', 'Giảm đau, hạ sốt', 'Suy gan nặng', 'Vàng da, phát ban', '1 viên mỗi 4-6h', 'Giảm đau hạ sốt'),
+        ('Ibuprofen 400mg', 'Ibuprofen', 'Kháng viêm, giảm đau', 'Loét dạ dày, suy thận', 'Đau bụng, buồn nôn', '1 viên sau ăn', 'NSAIDs'),
+        ('Aspirin 81mg', 'Acetylsalicylic acid', 'Phòng ngừa huyết khối', 'Rối loạn đông máu', 'Chảy máu tiêu hóa', '1 viên/ngày', 'NSAIDs'),
+        ('Amoxicillin 500mg', 'Amoxicillin', 'Nhiễm khuẩn hô hấp', 'Dị ứng Penicillin', 'Tiêu chảy, dị ứng', '1 viên x 3 lần/ngày', 'Kháng sinh Penicillin'),
+        ('Metformin 850mg', 'Metformin', 'Tiểu đường type 2', 'Suy thận, nhiễm toan', 'Đầy hơi, tiêu chảy', '1 viên x 2 lần/ngày', 'Biguanides')
     ]
-    db.session.add_all(drugs)
-    db.session.flush()
+    conn.executemany('INSERT INTO drugs (name, ingredients, indications, contraindications, side_effects, dosage, pharmacological_group) VALUES (?,?,?,?,?,?,?)', drugs_data)
 
-    diseases = [
-        Disease(name='Sốt xuất huyết',
-                description='Bệnh truyền nhiễm cấp tính do virus Dengue lây qua muỗi vằn.',
-                symptoms='Sốt cao đột ngột, đau cơ, phát ban, chảy máu cam hoặc nướu.'),
-        Disease(name='Tiểu đường type 2',
-                description='Rối loạn chuyển hóa mạn tính khiến cơ thể không sử dụng hiệu quả insulin.',
-                symptoms='Khát nước thường xuyên, đi tiểu nhiều, mệt mỏi, sụt cân không rõ nguyên nhân.'),
-        Disease(name='Viêm dạ dày',
-                description='Tình trạng niêm mạc dạ dày bị viêm, có thể do vi khuẩn HP hoặc lối sống.',
-                symptoms='Đau vùng thượng vị, ợ chua, đầy bụng, buồn nôn sau khi ăn.'),
-        Disease(name='Cao huyết áp',
-                description='Tình trạng áp lực máu lên thành động mạch quá cao.',
-                symptoms='Thường không có triệu chứng rõ rệt, đôi khi nhức đầu, chóng mặt, đỏ mặt.'),
-        Disease(name='Viêm phế quản',
-                description='Viêm các ống dẫn khí đến phổi.',
-                symptoms='Ho có đờm, khó thở, tức ngực, sốt nhẹ.'),
-        Disease(name='Loét dạ dày tá tràng',
-                description='Vết loét hình thành trên niêm mạc dạ dày hoặc tá tràng.',
-                symptoms='Đau bụng trên rốn, ợ nóng, buồn nôn, đau tăng khi đói.'),
-        Disease(name='Tăng cholesterol',
-                description='Nồng độ cholesterol xấu (LDL) trong máu cao hơn mức bình thường.',
-                symptoms='Thường không có triệu chứng; phát hiện qua xét nghiệm máu.'),
+    # Seed Diseases with ICD-10
+    diseases_data = [
+        ('Viêm loét dạ dày', 'K25', 'Tổn thương niêm mạc dạ dày', 'Đau thượng vị, ợ chua'),
+        ('Suy thận mãn tính', 'N18', 'Thận mất chức năng lọc', 'Mệt mỏi, phù nề'),
+        ('Tiểu đường type 2', 'E11', 'Tăng đường huyết mãn tính', 'Khát nước, tiểu nhiều'),
+        ('Tăng huyết áp', 'I10', 'Áp lực máu động mạch cao', 'Đau đầu, chóng mặt')
     ]
-    db.session.add_all(diseases)
-    db.session.flush()
+    conn.executemany('INSERT INTO diseases (name, icd10, description, symptoms) VALUES (?,?,?,?)', diseases_data)
 
-    interactions = [
-        Interaction(drug_id=2, target_type='disease', target_id=3, severity='High',
-                    description='Ibuprofen (NSAID) làm trầm trọng thêm tình trạng viêm loét và có thể gây xuất huyết dạ dày.'),
-        Interaction(drug_id=2, target_type='disease', target_id=6, severity='Severe',
-                    description='Ibuprofen chống chỉ định với loét dạ dày tá tràng. Có thể gây thủng hoặc xuất huyết nghiêm trọng.'),
-        Interaction(drug_id=4, target_type='drug', target_id=2, severity='High',
-                    description='Sử dụng đồng thời Aspirin và Ibuprofen làm tăng đáng kể nguy cơ xuất huyết tiêu hóa.'),
-        Interaction(drug_id=1, target_type='drug', target_id=2, severity='Low',
-                    description='Có thể phối hợp để tăng hiệu quả giảm đau nhưng cần theo dõi chức năng thận và gan.'),
-        Interaction(drug_id=5, target_type='disease', target_id=4, severity='Low',
-                    description='Amlodipine là thuốc điều trị chính cho cao huyết áp. Hiệu quả và an toàn khi dùng đúng liều.'),
-        Interaction(drug_id=3, target_type='disease', target_id=2, severity='Low',
-                    description='Metformin là lựa chọn đầu tay cho tiểu đường type 2. Hiệu quả và ít gây hạ đường huyết.'),
-        Interaction(drug_id=7, target_type='disease', target_id=7, severity='Low',
-                    description='Atorvastatin là thuốc điều trị tăng cholesterol hiệu quả, giúp giảm nguy cơ tim mạch.'),
-        Interaction(drug_id=8, target_type='disease', target_id=3, severity='Low',
-                    description='Omeprazole ức chế tiết axit dạ dày, hỗ trợ điều trị viêm và loét dạ dày hiệu quả.'),
-        Interaction(drug_id=4, target_type='disease', target_id=6, severity='Severe',
-                    description='Aspirin chống chỉ định tuyệt đối với loét dạ dày tá tràng. Có thể gây xuất huyết đe dọa tính mạng.'),
+    # Seed Interactions
+    interactions_data = [
+        (2, 'disease', 1, 'Severe', 'Ibuprofen gây kích ứng và làm trầm trọng thêm vết loét dạ dày.'),
+        (2, 'drug', 3, 'High', 'Kết hợp NSAIDs làm tăng nguy cơ xuất huyết tiêu hóa.'),
+        (5, 'disease', 2, 'Severe', 'Metformin chống chỉ định tuyệt đối cho bệnh nhân suy thận nặng.')
     ]
-    db.session.add_all(interactions)
+    conn.executemany('INSERT INTO interactions (drug_id, target_type, target_id, severity, description) VALUES (?,?,?,?,?)', interactions_data)
+    conn.commit()
 
-    # Create default admin account
-    admin = User(full_name='Quản trị viên', email='admin@medicheck.vn', role='admin')
-    admin.set_password('admin123')
-    db.session.add(admin)
+# --- AI INTEGRATION ---
+def call_ai(prompt):
+    api_key = os.getenv('OPENAI_API_KEY', 'sk-bee-ddafa53cb5a14928bf4754d21a58fb9d')
+    base_url = os.getenv('OPENAI_BASE_URL', 'https://platform.beeknoee.com/api/v1')
+    model = os.getenv('OPENAI_MODEL', 'claude-sonnet-4-6')
+    
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.3
+    }
+    try:
+        res = requests.post(f"{base_url}/chat/completions", headers=headers, json=payload)
+        return res.json()['choices'][0]['message']['content']
+    except Exception as e:
+        return f"AI Error: {str(e)}"
 
-    db.session.commit()
-    print(">>> [SUCCESS] Sample data seeded! Admin: admin@medicheck.vn / admin123")
-
-# Initialize database on startup
-with app.app_context():
-    db.create_all()
-    seed_data()
-    print(">>> [SUCCESS] Database ready! (SQLite)")
-
-# ==================== AUTH ROUTES ====================
-
-@app.route('/')
-def index():
-    return jsonify({"status": "healthy", "message": "MediCheck AI Backend is running"})
-
+# --- ROUTES ---
 @app.route('/api/auth/register', methods=['POST'])
 def register():
     data = request.json
-    full_name = data.get('full_name', '').strip()
-    email = data.get('email', '').strip().lower()
-    password = data.get('password', '')
-
-    if not full_name or not email or not password:
-        return jsonify({'error': 'Vui lòng điền đầy đủ thông tin'}), 400
-    if len(password) < 6:
-        return jsonify({'error': 'Mật khẩu phải có ít nhất 6 ký tự'}), 400
-    if User.query.filter_by(email=email).first():
-        return jsonify({'error': 'Email này đã được đăng ký'}), 409
-
-    user = User(full_name=full_name, email=email, role='user')
-    user.set_password(password)
-    db.session.add(user)
-    db.session.commit()
-
-    token = create_access_token(identity=str(user.id))
-    return jsonify({'token': token, 'user': user.to_dict()}), 201
+    pw_hash = generate_password_hash(data['password'])
+    role = data.get('role', 'doctor') # doctor, pharmacist
+    try:
+        conn = get_db_connection()
+        conn.execute('INSERT INTO users (email, password, full_name, role) VALUES (?, ?, ?, ?)',
+                     (data['email'], pw_hash, data['full_name'], role))
+        conn.commit()
+        # Return user info (no token here to keep it simple, or generate one)
+        user = conn.execute('SELECT id, email, full_name, role FROM users WHERE email = ?', (data['email'],)).fetchone()
+        token = create_access_token(identity=str(user['id']))
+        return jsonify({'token': token, 'user': dict(user)}), 201
+    except:
+        return jsonify({'error': 'Email đã tồn tại'}), 400
+    finally:
+        conn.close()
 
 @app.route('/api/auth/login', methods=['POST'])
 def login():
     data = request.json
-    email = data.get('email', '').strip().lower()
-    password = data.get('password', '')
+    conn = get_db_connection()
+    user = conn.execute('SELECT * FROM users WHERE email = ?', (data['email'],)).fetchone()
+    conn.close()
+    if user and check_password_hash(user['password'], data['password']):
+        token = create_access_token(identity=str(user['id']))
+        return jsonify({'token': token, 'user': {'id': user['id'], 'email': user['email'], 'full_name': user['full_name'], 'role': user['role']}})
+    return jsonify({'error': 'Sai email hoặc mật khẩu'}), 401
 
-    user = User.query.filter_by(email=email).first()
-    if not user or not user.check_password(password):
-        return jsonify({'error': 'Email hoặc mật khẩu không đúng'}), 401
+@app.route('/api/drugs', methods=['GET', 'POST'])
+def handle_drugs():
+    conn = get_db_connection()
+    if request.method == 'GET':
+        q = request.args.get('q', '')
+        # Diverse search: Name OR Ingredients
+        drugs = conn.execute("SELECT * FROM drugs WHERE name LIKE ? OR ingredients LIKE ?", (f'%{q}%', f'%{q}%')).fetchall()
+        return jsonify([dict(d) for d in drugs])
+    
+    # Admin CRUD: Create
+    data = request.json
+    conn.execute('INSERT INTO drugs (name, ingredients, indications, contraindications, side_effects, dosage, pharmacological_group) VALUES (?,?,?,?,?,?,?)',
+                 (data['name'], data['ingredients'], data.get('indications'), data.get('contraindications'), data.get('side_effects'), data.get('dosage'), data.get('pharmacological_group')))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Thành công'}), 201
 
-    token = create_access_token(identity=str(user.id))
-    return jsonify({'token': token, 'user': user.to_dict()})
+@app.route('/api/drugs/<int:id>', methods=['PUT', 'DELETE'])
+def crud_drug(id):
+    conn = get_db_connection()
+    if request.method == 'DELETE':
+        conn.execute('DELETE FROM drugs WHERE id = ?', (id,))
+        conn.commit()
+        return jsonify({'message': 'Đã xóa'})
+    
+    data = request.json
+    conn.execute('UPDATE drugs SET name=?, ingredients=?, indications=?, contraindications=?, side_effects=?, dosage=?, pharmacological_group=? WHERE id=?',
+                 (data['name'], data['ingredients'], data.get('indications'), data.get('contraindications'), data.get('side_effects'), data.get('dosage'), data.get('pharmacological_group'), id))
+    conn.commit()
+    return jsonify({'message': 'Đã cập nhật'})
 
-@app.route('/api/auth/me', methods=['GET'])
-@jwt_required()
-def get_me():
-    user_id = get_jwt_identity()
-    user = User.query.get(int(user_id))
-    if not user:
-        return jsonify({'error': 'Người dùng không tồn tại'}), 404
-    return jsonify({'user': user.to_dict()})
-
-# ==================== API ROUTES ====================
-
-@app.route('/api/drugs', methods=['GET'])
-def get_drugs():
-    search = request.args.get('q', '')
-    drugs = Drug.query.filter(Drug.name.ilike(f'%{search}%')).all()
-    return jsonify([{
-        'id': d.id, 'name': d.name, 'ingredients': d.ingredients,
-        'indications': d.indications, 'contraindications': d.contraindications,
-        'dosage': d.dosage, 'side_effects': d.side_effects
-    } for d in drugs])
-
-@app.route('/api/diseases', methods=['GET'])
-def get_diseases():
-    search = request.args.get('q', '')
-    diseases = Disease.query.filter(Disease.name.ilike(f'%{search}%')).all()
-    return jsonify([{
-        'id': d.id, 'name': d.name,
-        'description': d.description, 'symptoms': d.symptoms
-    } for d in diseases])
+@app.route('/api/diseases', methods=['GET', 'POST'])
+def handle_diseases():
+    conn = get_db_connection()
+    if request.method == 'GET':
+        q = request.args.get('q', '')
+        # Diverse search: Name OR ICD-10
+        diseases = conn.execute("SELECT * FROM diseases WHERE name LIKE ? OR icd10 LIKE ?", (f'%{q}%', f'%{q}%')).fetchall()
+        return jsonify([dict(d) for d in diseases])
+    
+    data = request.json
+    conn.execute('INSERT INTO diseases (name, icd10, description, symptoms) VALUES (?,?,?,?)',
+                 (data['name'], data['icd10'], data.get('description'), data.get('symptoms')))
+    conn.commit()
+    return jsonify({'message': 'Thành công'}), 201
 
 @app.route('/api/check-interaction', methods=['POST'])
 def check_interaction():
     data = request.json
-    drug_id = data.get('drug_id')
-    target_type = data.get('target_type')
-    target_id = data.get('target_id')
-
-    if target_type == 'drug':
-        interaction = Interaction.query.filter(
-            db.or_(
-                db.and_(Interaction.drug_id == drug_id, Interaction.target_id == target_id, Interaction.target_type == 'drug'),
-                db.and_(Interaction.drug_id == target_id, Interaction.target_id == drug_id, Interaction.target_type == 'drug')
-            )
-        ).first()
-    else:
-        interaction = Interaction.query.filter_by(
-            drug_id=drug_id, target_type=target_type, target_id=target_id
-        ).first()
-
-    if interaction:
-        return jsonify({'found': True, 'severity': interaction.severity, 'description': interaction.description})
-    else:
-        return jsonify({'found': False, 'message': 'Không tìm thấy tương tác trong cơ sở dữ liệu. Vui lòng dùng AI để phân tích.'})
+    conn = get_db_connection()
+    inter = conn.execute('SELECT * FROM interactions WHERE drug_id = ? AND target_type = ? AND target_id = ?',
+                        (data['drug_id'], data['target_type'], data['target_id'])).fetchone()
+    
+    result = {'found': False}
+    if inter:
+        result = {'found': True, 'severity': inter['severity'], 'description': inter['description']}
+    
+    # NEW: Suggest alternatives if interaction is found
+    alternatives = []
+    if result['found'] and result['severity'] in ['Severe', 'High']:
+        current_drug = conn.execute('SELECT pharmacological_group FROM drugs WHERE id = ?', (data['drug_id'],)).fetchone()
+        if current_drug and current_drug['pharmacological_group']:
+            # Find drugs in same group that DON'T have a recorded interaction with this target
+            alts = conn.execute('''
+                SELECT * FROM drugs 
+                WHERE pharmacological_group = ? AND id != ?
+                AND id NOT IN (SELECT drug_id FROM interactions WHERE target_type = ? AND target_id = ?)
+            ''', (current_drug['pharmacological_group'], data['drug_id'], data['target_type'], data['target_id'])).fetchall()
+            alternatives = [dict(a) for a in alts]
+            
+    conn.close()
+    return jsonify({**result, 'alternatives': alternatives})
 
 @app.route('/api/ai-analyze', methods=['POST'])
 def ai_analyze():
     data = request.json
-    prompt = data.get('prompt')
-    system_prompt = "Bạn là một chuyên gia dược học và y tế người Việt Nam. Hãy trả lời câu hỏi sau một cách chuyên nghiệp, chính xác và bằng tiếng Việt. Sử dụng định dạng rõ ràng với các đầu mục."
+    response = call_ai(data['prompt'])
+    return jsonify({'response': response})
 
-    try:
-        headers = {"Authorization": f"Bearer {AI_API_KEY}", "Content-Type": "application/json"}
-        payload = {
-            "model": AI_MODEL,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt}
-            ],
-            "max_tokens": 2048
-        }
-        res = http_requests.post(f"{AI_BASE_URL}/chat/completions", json=payload, headers=headers, timeout=60)
-        res.raise_for_status()
-        result = res.json()
-        text = result['choices'][0]['message']['content']
-        return jsonify({'response': text})
-    except Exception as e:
-        print(f">>> [AI ERROR] {str(e)}")
-        return jsonify({'error': f'Lỗi AI: {str(e)}'}), 500
-
-# Stats for dashboard
-@app.route('/api/stats', methods=['GET'])
+@app.route('/api/stats')
 def get_stats():
-    return jsonify({
-        'drugs': Drug.query.count(),
-        'diseases': Disease.query.count(),
-        'interactions': Interaction.query.count(),
-        'users': User.query.count()
-    })
+    conn = get_db_connection()
+    counts = {
+        'drugs': conn.execute('SELECT count(*) FROM drugs').fetchone()[0],
+        'diseases': conn.execute('SELECT count(*) FROM diseases').fetchone()[0],
+        'interactions': conn.execute('SELECT count(*) FROM interactions').fetchone()[0],
+        'users': conn.execute('SELECT count(*) FROM users').fetchone()[0],
+    }
+    conn.close()
+    return jsonify(counts)
 
 if __name__ == '__main__':
+    if not os.path.exists(DB_PATH):
+        init_db()
+    else:
+        # Update schema if column missing (safe migration for local)
+        conn = get_db_connection()
+        try: conn.execute('SELECT icd10 FROM diseases LIMIT 1')
+        except: 
+            conn.execute('ALTER TABLE diseases ADD COLUMN icd10 TEXT')
+            conn.execute('ALTER TABLE drugs ADD COLUMN pharmacological_group TEXT')
+        conn.commit()
+        conn.close()
     app.run(debug=True, port=5000)
