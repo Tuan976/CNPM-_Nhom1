@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+/* Định nghĩa variant dark cho Tailwind v4 */
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui;
+  --font-display: 'Outfit', ui-sans-serif, system-ui;
+  
+  /* Khai báo các biến màu vào theme của Tailwind */
+  --color-bg-main: var(--bg-primary);
+  --color-text-main: var(--text-primary);
+}
+
+/* ========================
+   THEME VARIABLES
+   ======================== */
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-sidebar: #ffffff;
+  --bg-card: #ffffff;
+  --border: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+}
+
+/* Ép buộc màu sắc khi có class .dark */
+.dark {
+  color-scheme: dark;
+  --bg-primary: #020617;
+  --bg-secondary: #0f172a;
+  --bg-sidebar: #0f172a;
+  --bg-card: #1e293b;
+  --border: #1e293b;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #475569;
+}
+
+/* ========================
+   GLOBAL STYLES
+   ======================== */
+@layer base {
+  html, body {
+    background-color: var(--bg-primary) !important;
+    color: var(--text-primary) !important;
+    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+/* Các helper class */
+.theme-bg { background-color: var(--bg-primary); }
+.theme-text { color: var(--text-primary); }
+.theme-border { border-color: var(--border); }
+
+.glass-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 1.5rem;
+  transition: all 0.2s ease;
+}
+
+.nav-item-active {
+  background-color: #2563eb;
+  color: white;
+}
