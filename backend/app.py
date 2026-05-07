@@ -62,6 +62,26 @@ class Login(Resource):
             return {'token': token, 'user': {'id': user.id, 'name': user.full_name, 'role': user.role}}
         return {'error': 'Unauthorized'}, 401
 
+@ns_auth.route('/register')
+class Register(Resource):
+    def post(self):
+        data = request.json
+        if not data or not data.get('username') or not data.get('password'):
+            return {'error': 'Vui lòng điền đủ tên đăng nhập và mật khẩu'}, 400
+            
+        if User.query.filter_by(username=data['username']).first():
+            return {'error': 'Tên đăng nhập đã tồn tại'}, 400
+            
+        new_user = User(
+            username=data['username'],
+            password=generate_password_hash(data['password']),
+            full_name=data.get('full_name', data['username']),
+            role=data.get('role', 'admin') # Mặc định admin để dễ test
+        )
+        db.session.add(new_user)
+        db.session.commit()
+        return {'message': 'Đăng ký thành công'}, 201
+
 # --- POS: BÁN HÀNG ---
 @ns_pos.route('/checkout')
 class Checkout(Resource):

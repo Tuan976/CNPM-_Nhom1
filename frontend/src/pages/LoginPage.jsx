@@ -101,6 +101,13 @@ export default function LoginPage() {
             <p className="text-center text-[11px] font-medium pt-1" style={{ color: 'var(--bc-ink-300)' }}>
               Tài khoản thử: <span style={{ color: 'var(--bc-blue)', fontWeight: 600 }}>admin</span> / <span style={{ color: 'var(--bc-blue)', fontWeight: 600 }}>admin123</span>
             </p>
+
+            <div className="text-center mt-4">
+              <span className="text-[12px] font-medium text-slate-500">Chưa có tài khoản? </span>
+              <button type="button" onClick={() => navigate('/register')} className="text-[12px] font-bold text-blue-600 hover:text-blue-700 transition-colors">
+                Đăng ký ngay
+              </button>
+            </div>
           </form>
         </motion.div>
       </div>

@@ -1,169 +1,127 @@
-import React, { useState, useContext } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { AuthContext } from '../App';
-import { useTheme } from '../context/ThemeContext';
-import { Activity, Mail, Lock, User, Eye, EyeOff, AlertCircle, Sun, Moon, Stethoscope, Pill, ChevronLeft } from 'lucide-react';
+import React, { useState } from 'react';
+import { ShoppingCart, Lock, User, ArrowRight, UserPlus, FileText } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import axios from 'axios';
 
-const RegisterPage = () => {
-  const { login } = useContext(AuthContext);
-  const { theme, toggleTheme } = useTheme();
-  const navigate = useNavigate();
-  const [form, setForm] = useState({ full_name: '', email: '', password: '', confirm: '', role: 'doctor' });
-  const [showPw, setShowPw] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+const fontDisplay = { fontFamily: '"Bricolage Grotesque", "Be Vietnam Pro", sans-serif' };
+const fontBody    = { fontFamily: '"Be Vietnam Pro", sans-serif' };
+
+export default function RegisterPage() {
+  const [fullname, setFullname] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError]       = useState('');
+  const [loading, setLoading]   = useState(false);
+  const navigate                = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (form.password !== form.confirm) { setError('Mật khẩu xác nhận không khớp'); return; }
     setLoading(true);
+    setError('');
+    
     try {
-      const res = await axios.post('http://localhost:5000/api/auth/register', form);
-      login(res.data.token, res.data.user);
-      navigate('/dashboard');
+      const res = await axios.post('http://localhost:5000/api/auth/register', {
+        username: username,
+        password: password,
+        full_name: fullname,
+        role: 'admin' // Mặc định admin
+      });
+      if (res.status === 201) {
+        alert('Đăng ký tài khoản thành công! Vui lòng đăng nhập.');
+        navigate('/login');
+      }
     } catch (err) {
-      setError(err.response?.data?.error || 'Đăng ký thất bại.');
-    } finally {
+      setError(err.response?.data?.error || 'Đã có lỗi xảy ra khi đăng ký');
       setLoading(false);
     }
   };
 
   return (
-    <div className={`min-h-screen flex transition-colors duration-500 overflow-hidden ${theme === 'dark' ? 'dark' : ''}`}>
-      <div className="flex-1 flex flex-row w-full h-full min-h-screen">
-        {/* Left panel - Decorative */}
-        <div className="hidden lg:flex flex-[0.8] bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-900 p-16 flex-col justify-between relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-full h-full opacity-10 pointer-events-none">
-              <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] bg-white rounded-full blur-[120px]" />
-              <div className="absolute bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-cyan-400 rounded-full blur-[100px]" />
-          </div>
-          
-          <div className="relative z-10">
-            <Link to="/" className="flex items-center gap-3 mb-20 group w-fit">
-              <div className="bg-white/20 p-2.5 rounded-2xl backdrop-blur-md group-hover:scale-110 transition-transform">
-                <Activity size={28} className="text-white" />
-              </div>
-              <span className="text-white font-bold text-2xl tracking-tight">MediCheck AI</span>
-            </Link>
-            
-            <h2 className="text-5xl font-bold text-white leading-[1.2] mb-8">
-              Nền tảng hỗ trợ<br />quyết định y khoa<br /><span className="text-cyan-300">chính xác nhất.</span>
-            </h2>
-            
-            <div className="space-y-6">
-              {[
-                { t: 'Tra cứu ICD-10 chuẩn hóa', d: 'Dữ liệu bệnh lý cập nhật theo WHO.' },
-                { t: 'Cảnh báo tương tác thời gian thực', d: 'Phân tích đa chiều thuốc và bệnh lý.' }
-              ].map((item, i) => (
-                <div key={i} className="flex gap-4">
-                  <div className="mt-1 bg-white/10 p-1.5 rounded-full h-fit"><Activity size={18} className="text-cyan-300" /></div>
-                  <div>
-                    <h4 className="text-white font-bold text-lg">{item.t}</h4>
-                    <p className="text-blue-100/70 text-sm">{item.d}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="relative z-10 p-8 bg-white/5 backdrop-blur-md rounded-[2.5rem] border border-white/10">
-            <p className="text-white/80 italic text-lg leading-relaxed">"Giao diện hiện đại và tốc độ tra cứu đáng kinh ngạc."</p>
-          </div>
-        </div>
+    <div className="premium-bg min-h-screen flex items-center justify-center p-6" style={fontBody}>
+      <div className="w-full max-w-sm">
+        <motion.div initial={{ opacity:0, y:28 }} animate={{ opacity:1, y:0 }}
+          transition={{ duration: 0.42, ease: [0.22,1,0.36,1] }}
+          className="bg-white rounded-3xl overflow-hidden"
+          style={{ boxShadow: 'var(--bc-shadow-4)' }}>
 
-        {/* Right panel - Form */}
-        <div className="flex-1 flex flex-col relative overflow-y-auto dark:bg-slate-950 bg-white">
-          <header className="p-8 flex justify-between items-center sticky top-0 dark:bg-slate-950/80 bg-white/80 backdrop-blur-md z-20">
-              <Link to="/" className="text-slate-400 hover:text-blue-500 flex items-center gap-2 text-sm font-medium transition-colors">
-                  <ChevronLeft size={18} /> Quay lại
-              </Link>
-              <button onClick={toggleTheme} className="p-3 rounded-2xl dark:bg-slate-900 bg-slate-100 border dark:border-slate-800 border-slate-200 shadow-sm transition-transform active:scale-90">
-                  {theme === 'dark' ? <Sun size={20} className="text-yellow-400" /> : <Moon size={20} className="text-slate-600" />}
+          {/* Header */}
+          <div className="px-8 pt-10 pb-8 text-center"
+               style={{ background: 'linear-gradient(160deg, var(--bc-blue-tint) 0%, #fff 100%)', borderBottom: '1px solid var(--bc-ink-100)' }}>
+            <div className="w-14 h-14 rounded-2xl mx-auto mb-5 flex items-center justify-center text-white"
+                 style={{ background: 'linear-gradient(135deg,var(--bc-teal),var(--bc-blue-700))', boxShadow: 'var(--bc-shadow-blue)' }}>
+              <UserPlus size={26} />
+            </div>
+            <h1 className="text-2xl font-bold leading-none mb-2"
+                style={{ ...fontDisplay, color: 'var(--bc-ink-900)', letterSpacing: '-0.04em' }}>
+              Tạo tài khoản mới
+            </h1>
+            <p className="text-[11px] font-medium" style={{ color: 'var(--bc-ink-300)', letterSpacing: '0.1em' }}>
+              MINIMART POS SYSTEM
+            </p>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="px-8 py-7 space-y-4">
+            {error && (
+              <motion.div initial={{ opacity:0, x:-8 }} animate={{ opacity:1, x:0 }}
+                className="px-4 py-3 rounded-2xl text-[12px] font-semibold text-center"
+                style={{ ...fontBody, background: 'var(--bc-coral-tint)', color: 'var(--bc-coral-700)', border: '1px solid rgba(255,107,94,0.2)' }}>
+                {error}
+              </motion.div>
+            )}
+
+            {[
+              { label: 'Họ và tên',     type: 'text',     val: fullname, set: setFullname, icon: FileText, placeholder: 'Nguyễn Văn A' },
+              { label: 'Tên đăng nhập', type: 'text',     val: username, set: setUsername, icon: User,     placeholder: 'admin2' },
+              { label: 'Mật khẩu',      type: 'password', val: password, set: setPassword, icon: Lock,     placeholder: '••••••' },
+            ].map(({ label, type, val, set, icon: Icon, placeholder }) => (
+              <div key={label} className="space-y-1.5">
+                <label className="text-[11px] font-semibold block ml-1"
+                       style={{ ...fontBody, color: 'var(--bc-ink-500)', letterSpacing: '0.05em' }}>
+                  {label}
+                </label>
+                <div className="relative">
+                  <Icon className="absolute left-4 top-1/2 -translate-y-1/2" size={16}
+                        style={{ color: 'var(--bc-ink-300)' }} />
+                  <input type={type} value={val} onChange={e => set(e.target.value)}
+                    placeholder={placeholder} required
+                    className="w-full rounded-2xl text-[14px] font-medium outline-none transition-all"
+                    style={{
+                      ...fontBody,
+                      paddingLeft: 44, paddingRight: 16, paddingTop: 13, paddingBottom: 13,
+                      background: 'var(--bc-bg-soft)',
+                      border: '2px solid var(--bc-ink-100)',
+                      color: 'var(--bc-ink-900)',
+                    }}
+                    onFocus={e => { e.target.style.borderColor = 'var(--bc-blue)'; e.target.style.background = 'white'; }}
+                    onBlur={e => { e.target.style.borderColor = 'var(--bc-ink-100)'; e.target.style.background = 'var(--bc-bg-soft)'; }}
+                  />
+                </div>
+              </div>
+            ))}
+
+            <button type="submit" disabled={loading}
+              className="w-full rounded-2xl text-white text-[13px] font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2.5 mt-2"
+              style={{
+                ...fontBody,
+                padding: '14px 24px',
+                background: 'linear-gradient(135deg,var(--bc-teal),var(--bc-blue-700))',
+                boxShadow: 'var(--bc-shadow-3)',
+                letterSpacing: '0.02em',
+              }}>
+              {loading ? 'Đang tạo tài khoản...' : (<>Đăng ký ngay <ArrowRight size={16} /></>)}
+            </button>
+
+            <div className="text-center mt-6">
+              <span className="text-[12px] font-medium text-slate-500">Đã có tài khoản? </span>
+              <button type="button" onClick={() => navigate('/login')} className="text-[12px] font-bold text-blue-600 hover:text-blue-700 transition-colors">
+                Đăng nhập
               </button>
-          </header>
-
-          <div className="flex-1 flex items-center justify-center p-8 lg:p-12">
-            <div className="w-full max-w-xl space-y-10">
-              <div className="text-center space-y-2">
-                <h1 className="text-4xl font-bold dark:text-white text-slate-900 tracking-tight text-center">Tạo tài khoản mới</h1>
-                <p className="dark:text-slate-400 text-slate-500 font-medium text-center">Bắt đầu hành trình số hóa y khoa cùng MediCheck</p>
-              </div>
-
-              {error && (
-                <div className="bg-red-500/10 border border-red-500/20 text-red-500 rounded-2xl p-4 flex items-center gap-3 text-sm">
-                  <AlertCircle size={20} /> {error}
-                </div>
-              )}
-
-              <form onSubmit={handleSubmit} className="space-y-8">
-                <div className="space-y-3 text-center">
-                  <label className="text-sm font-bold dark:text-slate-500 text-slate-400 uppercase tracking-widest">Tôi là</label>
-                  <div className="grid grid-cols-2 gap-6">
-                    <button type="button" onClick={() => setForm({...form, role: 'doctor'})} 
-                      className={`p-6 rounded-3xl border-2 transition-all flex flex-col items-center gap-3 ${form.role === 'doctor' ? 'border-blue-500 bg-blue-500/5 text-blue-500' : 'dark:border-slate-800 border-slate-100 opacity-60'}`}>
-                      <Stethoscope size={28} /> <span className="font-bold text-lg">Bác sĩ</span>
-                    </button>
-                    <button type="button" onClick={() => setForm({...form, role: 'pharmacist'})} 
-                      className={`p-6 rounded-3xl border-2 transition-all flex flex-col items-center gap-3 ${form.role === 'pharmacist' ? 'border-emerald-500 bg-emerald-500/5 text-emerald-500' : 'dark:border-slate-800 border-slate-100 opacity-60'}`}>
-                      <Pill size={28} /> <span className="font-bold text-lg">Dược sĩ</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold dark:text-slate-500 text-slate-400 uppercase tracking-widest ml-1">Họ và tên</label>
-                    <div className="relative">
-                      <User size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input type="text" value={form.full_name} onChange={e => setForm({...form, full_name: e.target.value})} placeholder="Nguyễn Văn A" required className="w-full py-4 pl-14 pr-6 rounded-2xl border dark:border-slate-800 border-slate-200 dark:bg-slate-900 dark:text-white outline-none focus:border-blue-500 transition-all" />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold dark:text-slate-500 text-slate-400 uppercase tracking-widest ml-1">Email</label>
-                    <div className="relative">
-                      <Mail size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="bacsi@vinmed.vn" required className="w-full py-4 pl-14 pr-6 rounded-2xl border dark:border-slate-800 border-slate-200 dark:bg-slate-900 dark:text-white outline-none focus:border-blue-500 transition-all" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold dark:text-slate-500 text-slate-400 uppercase tracking-widest ml-1">Mật khẩu</label>
-                    <div className="relative">
-                      <Lock size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input type={showPw ? 'text' : 'password'} value={form.password} onChange={e => setForm({...form, password: e.target.value})} placeholder="••••••••" required className="w-full py-4 pl-14 pr-12 rounded-2xl border dark:border-slate-800 border-slate-200 dark:bg-slate-900 dark:text-white outline-none focus:border-blue-500 transition-all" />
-                      <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">
-                        {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold dark:text-slate-500 text-slate-400 uppercase tracking-widest ml-1">Xác nhận</label>
-                    <div className="relative">
-                      <Lock size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input type="password" value={form.confirm} onChange={e => setForm({...form, confirm: e.target.value})} placeholder="••••••••" required className="w-full py-4 pl-14 pr-6 rounded-2xl border dark:border-slate-800 border-slate-200 dark:bg-slate-900 dark:text-white outline-none focus:border-blue-500 transition-all" />
-                    </div>
-                  </div>
-                </div>
-
-                <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-5 rounded-2xl font-bold text-lg transition-all shadow-xl shadow-blue-500/25 active:scale-95 disabled:opacity-50">
-                  {loading ? 'Đang xử lý...' : 'Kích hoạt tài khoản'}
-                </button>
-              </form>
-
-              <div className="text-center pt-4">
-                <p className="dark:text-slate-500 text-slate-500">
-                  Đã có tài khoản?{' '}
-                  <Link to="/login" className="text-blue-600 font-bold hover:underline">Đăng nhập ngay</Link>
-                </p>
-              </div>
             </div>
-          </div>
-        </div>
+          </form>
+        </motion.div>
       </div>
     </div>
   );
-};
-
-export default RegisterPage;
+}
