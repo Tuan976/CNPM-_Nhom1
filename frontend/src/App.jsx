@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage';
 import UserDashboard from './pages/UserDashboard';
 import PaymentResult from './pages/PaymentResult';
 import LandingPage from './pages/LandingPage';
+import { TermsOfService, PrivacyPolicy, RefundPolicy, DisputeResolution } from './pages/LegalPages';
 
 const PrivateRoute = ({ children }) => {
   const { token } = React.useContext(AuthContext);
@@ -20,6 +21,10 @@ function App() {
           <Route path="/dashboard" element={<PrivateRoute><UserDashboard /></PrivateRoute>} />
           <Route path="/payment/success" element={<PaymentResult type="success" />} />
           <Route path="/payment/cancel"  element={<PaymentResult type="cancel" />} />
+          <Route path="/terms" element={<TermsOfService />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/refund" element={<RefundPolicy />} />
+          <Route path="/dispute" element={<DisputeResolution />} />
           <Route path="/" element={<LandingPage />} />
         </Routes>
       </Router>

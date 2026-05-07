@@ -157,10 +157,10 @@ export default function LandingPage() {
             <div>
               <h4 className="text-[14px] font-bold mb-4" style={{ color: 'var(--bc-ink-900)' }}>Pháp lý & Điều khoản</h4>
               <ul className="space-y-3 text-[13px] text-slate-500 font-medium">
-                <li><a href="#" className="hover:text-blue-600 transition-colors">Điều khoản dịch vụ</a></li>
-                <li><a href="#" className="hover:text-blue-600 transition-colors">Chính sách bảo mật</a></li>
-                <li><a href="#" className="hover:text-blue-600 transition-colors">Chính sách hoàn tiền</a></li>
-                <li><a href="#" className="hover:text-blue-600 transition-colors">Giải quyết khiếu nại</a></li>
+                <li><a href="/terms" className="hover:text-blue-600 transition-colors">Điều khoản dịch vụ</a></li>
+                <li><a href="/privacy" className="hover:text-blue-600 transition-colors">Chính sách bảo mật</a></li>
+                <li><a href="/refund" className="hover:text-blue-600 transition-colors">Chính sách hoàn tiền</a></li>
+                <li><a href="/dispute" className="hover:text-blue-600 transition-colors">Giải quyết khiếu nại</a></li>
               </ul>
             </div>
 
