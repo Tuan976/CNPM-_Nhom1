@@ -4,3 +4,7 @@ mysql-connector-python
 google-generativeai
 python-dotenv
 flask-cors
+flask-jwt-extended
+flask-restx
+marshmallow
+bcrypt

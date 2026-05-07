@@ -1,263 +1,534 @@
 import os
-import sqlite3
-import requests
+import time
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from flask_restx import Api, Resource
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
+from models import db, User, Product, Category, Order, OrderItem, Customer
+from datetime import datetime, timedelta
+from sqlalchemy import func
+import google.generativeai as genai
+from payos import PayOS
+from payos.types import ItemData, CreatePaymentLinkRequest
 
 load_dotenv()
+
+# Google Gemini (optional - skip if key not set)
+try:
+    genai.configure(api_key=os.getenv("GENAI_API_KEY", ""))
+    model = genai.GenerativeModel('gemini-pro')
+except Exception:
+    model = None
+
+# PayOS init
+payos = PayOS(
+    client_id=os.getenv("PAYOS_CLIENT_ID"),
+    api_key=os.getenv("PAYOS_API_KEY"),
+    checksum_key=os.getenv("PAYOS_CHECKSUM_KEY")
+)
 
 app = Flask(__name__)
 CORS(app)
 
-app.config['JWT_SECRET_KEY'] = 'medicheck-super-secret-key-2026'
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(BASE_DIR, 'supermarket.db')}"
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['JWT_SECRET_KEY'] = 'supermarket-pos-secret-2026'
+
+db.init_app(app)
 jwt = JWTManager(app)
 
-DB_PATH = 'medical_v2.db'
+api = Api(app, version='1.0', title='MiniMart POS API', doc='/docs')
 
-# --- DATABASE SETUP ---
-def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+ns_auth      = api.namespace('api/auth',      description='Xác thực nhân viên')
+ns_pos       = api.namespace('api/pos',       description='Giao dịch bán hàng')
+ns_products  = api.namespace('api/products',  description='Quản lý kho')
+ns_dashboard = api.namespace('api/dashboard', description='Báo cáo thống kê')
+ns_orders    = api.namespace('api/orders',    description='Lịch sử giao dịch')
+ns_payment   = api.namespace('api/payment',   description='PayOS thanh toán')
+ns_staff     = api.namespace('api/staff',     description='Quản lý nhân sự')
+ns_customers = api.namespace('api/customers', description='Quản lý khách hàng')
 
-def init_db():
-    conn = get_db_connection()
-    # Users table with specific roles
-    conn.execute('''CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
-        full_name TEXT NOT NULL,
-        role TEXT DEFAULT 'doctor' -- doctor, pharmacist, admin
-    )''')
-    
-    # Drugs table with generic name and pharmacological group
-    conn.execute('''CREATE TABLE IF NOT EXISTS drugs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL, -- Brand Name
-        ingredients TEXT NOT NULL, -- Generic Name / Active Ingredients
-        indications TEXT,
-        contraindications TEXT,
-        side_effects TEXT,
-        dosage TEXT,
-        pharmacological_group TEXT -- For suggesting alternatives
-    )''')
-    
-    # Diseases table with ICD-10 code
-    conn.execute('''CREATE TABLE IF NOT EXISTS diseases (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        icd10 TEXT, -- International Classification of Diseases
-        description TEXT,
-        symptoms TEXT
-    )''')
-    
-    # Interactions table
-    conn.execute('''CREATE TABLE IF NOT EXISTS interactions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        drug_id INTEGER,
-        target_type TEXT, -- 'drug' or 'disease'
-        target_id INTEGER,
-        severity TEXT, -- Severe, High, Moderate, Low
-        description TEXT,
-        FOREIGN KEY (drug_id) REFERENCES drugs(id)
-    )''')
-    
-    conn.commit()
-    seed_data(conn)
-    conn.close()
+# --- AUTH ---
+@ns_auth.route('/login')
+class Login(Resource):
+    def post(self):
+        data = request.json
+        user = User.query.filter_by(username=data['username']).first()
+        if user and check_password_hash(user.password, data['password']):
+            token = create_access_token(identity={'id': user.id, 'role': user.role})
+            return {'token': token, 'user': {'id': user.id, 'name': user.full_name, 'role': user.role}}
+        return {'error': 'Unauthorized'}, 401
 
-def seed_data(conn):
-    # Check if data exists
-    if conn.execute('SELECT count(*) FROM drugs').fetchone()[0] > 0:
-        return
+# --- POS: BÁN HÀNG ---
+@ns_pos.route('/checkout')
+class Checkout(Resource):
+    @jwt_required()
+    def post(self):
+        current_user = get_jwt_identity()
+        data = request.json # {items: [{product_id, quantity}], customer_phone, payment_method}
+        
+        total = 0
+        discount = data.get('discount', 0)
+        customer_id = data.get('customer_id')
 
-    # Seed Admin
-    admin_pw = generate_password_hash('admin123')
-    conn.execute('INSERT OR IGNORE INTO users (email, password, full_name, role) VALUES (?, ?, ?, ?)',
-                 ('admin@medicheck.vn', admin_pw, 'Quản trị viên', 'admin'))
-    
-    # Seed Drugs with Pharmacological Groups
-    drugs_data = [
-        ('Paracetamol 500mg', 'Paracetamol', 'Giảm đau, hạ sốt', 'Suy gan nặng', 'Vàng da, phát ban', '1 viên mỗi 4-6h', 'Giảm đau hạ sốt'),
-        ('Ibuprofen 400mg', 'Ibuprofen', 'Kháng viêm, giảm đau', 'Loét dạ dày, suy thận', 'Đau bụng, buồn nôn', '1 viên sau ăn', 'NSAIDs'),
-        ('Aspirin 81mg', 'Acetylsalicylic acid', 'Phòng ngừa huyết khối', 'Rối loạn đông máu', 'Chảy máu tiêu hóa', '1 viên/ngày', 'NSAIDs'),
-        ('Amoxicillin 500mg', 'Amoxicillin', 'Nhiễm khuẩn hô hấp', 'Dị ứng Penicillin', 'Tiêu chảy, dị ứng', '1 viên x 3 lần/ngày', 'Kháng sinh Penicillin'),
-        ('Metformin 850mg', 'Metformin', 'Tiểu đường type 2', 'Suy thận, nhiễm toan', 'Đầy hơi, tiêu chảy', '1 viên x 2 lần/ngày', 'Biguanides')
-    ]
-    conn.executemany('INSERT INTO drugs (name, ingredients, indications, contraindications, side_effects, dosage, pharmacological_group) VALUES (?,?,?,?,?,?,?)', drugs_data)
+        new_order = Order(
+            order_number=f"HD-{datetime.utcnow().strftime('%y%m%d%H%M%S')}",
+            staff_id=current_user['id'],
+            payment_method=data.get('payment_method', 'Cash'),
+            customer_id=customer_id
+        )
+        
+        for item in data['items']:
+            product = Product.query.get(item['product_id'])
+            if product and product.stock_quantity >= item['quantity']:
+                subtotal = product.price * item['quantity']
+                total += subtotal
+                # Trừ kho
+                product.stock_quantity -= item['quantity']
+                
+                order_item = OrderItem(
+                    product_id=product.id,
+                    quantity=item['quantity'],
+                    unit_price=product.price,
+                    subtotal=subtotal
+                )
+                new_order.items.append(order_item)
+            else:
+                return {'error': f"Sản phẩm {product.name if product else 'N/A'} không đủ tồn kho"}, 400
+        
+        new_order.total_amount = total
+        new_order.discount = discount
+        new_order.final_amount = total - discount
+        db.session.add(new_order)
 
-    # Seed Diseases with ICD-10
-    diseases_data = [
-        ('Viêm loét dạ dày', 'K25', 'Tổn thương niêm mạc dạ dày', 'Đau thượng vị, ợ chua'),
-        ('Suy thận mãn tính', 'N18', 'Thận mất chức năng lọc', 'Mệt mỏi, phù nề'),
-        ('Tiểu đường type 2', 'E11', 'Tăng đường huyết mãn tính', 'Khát nước, tiểu nhiều'),
-        ('Tăng huyết áp', 'I10', 'Áp lực máu động mạch cao', 'Đau đầu, chóng mặt')
-    ]
-    conn.executemany('INSERT INTO diseases (name, icd10, description, symptoms) VALUES (?,?,?,?)', diseases_data)
+        # Cập nhật điểm khách hàng
+        if customer_id:
+            customer = Customer.query.get(customer_id)
+            if customer:
+                if discount > 0: customer.points -= int(discount / 1000)
+                customer.points += int(new_order.final_amount / 10000)
 
-    # Seed Interactions
-    interactions_data = [
-        (2, 'disease', 1, 'Severe', 'Ibuprofen gây kích ứng và làm trầm trọng thêm vết loét dạ dày.'),
-        (2, 'drug', 3, 'High', 'Kết hợp NSAIDs làm tăng nguy cơ xuất huyết tiêu hóa.'),
-        (5, 'disease', 2, 'Severe', 'Metformin chống chỉ định tuyệt đối cho bệnh nhân suy thận nặng.')
-    ]
-    conn.executemany('INSERT INTO interactions (drug_id, target_type, target_id, severity, description) VALUES (?,?,?,?,?)', interactions_data)
-    conn.commit()
+        db.session.commit()
+        
+        return {'message': 'Thanh toán thành công', 'order_id': new_order.id, 'total': new_order.final_amount}
 
-# --- AI INTEGRATION ---
-def call_ai(prompt):
-    api_key = os.getenv('OPENAI_API_KEY', 'sk-bee-ddafa53cb5a14928bf4754d21a58fb9d')
-    base_url = os.getenv('OPENAI_BASE_URL', 'https://platform.beeknoee.com/api/v1')
-    model = os.getenv('OPENAI_MODEL', 'claude-sonnet-4-6')
-    
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.3
-    }
-    try:
-        res = requests.post(f"{base_url}/chat/completions", headers=headers, json=payload)
-        return res.json()['choices'][0]['message']['content']
-    except Exception as e:
-        return f"AI Error: {str(e)}"
+# --- DASHBOARD: THỐNG KÊ ---
+@ns_dashboard.route('/summary')
+class Summary(Resource):
+    @jwt_required()
+    def get(self):
+        today = datetime.utcnow().date()
+        # Doanh thu hôm nay
+        revenue_today = db.session.query(func.sum(Order.final_amount)).filter(func.date(Order.created_at) == today).scalar() or 0
+        # Tổng đơn hàng hôm nay
+        orders_today = Order.query.filter(func.date(Order.created_at) == today).count()
+        # Sản phẩm sắp hết hàng
+        low_stock = Product.query.filter(Product.stock_quantity < 10).count()
+        
+        return {
+            'revenue_today': revenue_today,
+            'orders_today': orders_today,
+            'low_stock_count': low_stock
+        }
 
-# --- ROUTES ---
-@app.route('/api/auth/register', methods=['POST'])
-def register():
-    data = request.json
-    pw_hash = generate_password_hash(data['password'])
-    role = data.get('role', 'doctor') # doctor, pharmacist
-    try:
-        conn = get_db_connection()
-        conn.execute('INSERT INTO users (email, password, full_name, role) VALUES (?, ?, ?, ?)',
-                     (data['email'], pw_hash, data['full_name'], role))
-        conn.commit()
-        # Return user info (no token here to keep it simple, or generate one)
-        user = conn.execute('SELECT id, email, full_name, role FROM users WHERE email = ?', (data['email'],)).fetchone()
-        token = create_access_token(identity=str(user['id']))
-        return jsonify({'token': token, 'user': dict(user)}), 201
-    except:
-        return jsonify({'error': 'Email đã tồn tại'}), 400
-    finally:
-        conn.close()
-
-@app.route('/api/auth/login', methods=['POST'])
-def login():
-    data = request.json
-    conn = get_db_connection()
-    user = conn.execute('SELECT * FROM users WHERE email = ?', (data['email'],)).fetchone()
-    conn.close()
-    if user and check_password_hash(user['password'], data['password']):
-        token = create_access_token(identity=str(user['id']))
-        return jsonify({'token': token, 'user': {'id': user['id'], 'email': user['email'], 'full_name': user['full_name'], 'role': user['role']}})
-    return jsonify({'error': 'Sai email hoặc mật khẩu'}), 401
-
-@app.route('/api/drugs', methods=['GET', 'POST'])
-def handle_drugs():
-    conn = get_db_connection()
-    if request.method == 'GET':
-        q = request.args.get('q', '')
-        # Diverse search: Name OR Ingredients
-        drugs = conn.execute("SELECT * FROM drugs WHERE name LIKE ? OR ingredients LIKE ?", (f'%{q}%', f'%{q}%')).fetchall()
-        return jsonify([dict(d) for d in drugs])
-    
-    # Admin CRUD: Create
-    data = request.json
-    conn.execute('INSERT INTO drugs (name, ingredients, indications, contraindications, side_effects, dosage, pharmacological_group) VALUES (?,?,?,?,?,?,?)',
-                 (data['name'], data['ingredients'], data.get('indications'), data.get('contraindications'), data.get('side_effects'), data.get('dosage'), data.get('pharmacological_group')))
-    conn.commit()
-    conn.close()
-    return jsonify({'message': 'Thành công'}), 201
-
-@app.route('/api/drugs/<int:id>', methods=['PUT', 'DELETE'])
-def crud_drug(id):
-    conn = get_db_connection()
-    if request.method == 'DELETE':
-        conn.execute('DELETE FROM drugs WHERE id = ?', (id,))
-        conn.commit()
-        return jsonify({'message': 'Đã xóa'})
-    
-    data = request.json
-    conn.execute('UPDATE drugs SET name=?, ingredients=?, indications=?, contraindications=?, side_effects=?, dosage=?, pharmacological_group=? WHERE id=?',
-                 (data['name'], data['ingredients'], data.get('indications'), data.get('contraindications'), data.get('side_effects'), data.get('dosage'), data.get('pharmacological_group'), id))
-    conn.commit()
-    return jsonify({'message': 'Đã cập nhật'})
-
-@app.route('/api/diseases', methods=['GET', 'POST'])
-def handle_diseases():
-    conn = get_db_connection()
-    if request.method == 'GET':
-        q = request.args.get('q', '')
-        # Diverse search: Name OR ICD-10
-        diseases = conn.execute("SELECT * FROM diseases WHERE name LIKE ? OR icd10 LIKE ?", (f'%{q}%', f'%{q}%')).fetchall()
-        return jsonify([dict(d) for d in diseases])
-    
-    data = request.json
-    conn.execute('INSERT INTO diseases (name, icd10, description, symptoms) VALUES (?,?,?,?)',
-                 (data['name'], data['icd10'], data.get('description'), data.get('symptoms')))
-    conn.commit()
-    return jsonify({'message': 'Thành công'}), 201
-
-@app.route('/api/check-interaction', methods=['POST'])
-def check_interaction():
-    data = request.json
-    conn = get_db_connection()
-    inter = conn.execute('SELECT * FROM interactions WHERE drug_id = ? AND target_type = ? AND target_id = ?',
-                        (data['drug_id'], data['target_type'], data['target_id'])).fetchone()
-    
-    result = {'found': False}
-    if inter:
-        result = {'found': True, 'severity': inter['severity'], 'description': inter['description']}
-    
-    # NEW: Suggest alternatives if interaction is found
-    alternatives = []
-    if result['found'] and result['severity'] in ['Severe', 'High']:
-        current_drug = conn.execute('SELECT pharmacological_group FROM drugs WHERE id = ?', (data['drug_id'],)).fetchone()
-        if current_drug and current_drug['pharmacological_group']:
-            # Find drugs in same group that DON'T have a recorded interaction with this target
-            alts = conn.execute('''
-                SELECT * FROM drugs 
-                WHERE pharmacological_group = ? AND id != ?
-                AND id NOT IN (SELECT drug_id FROM interactions WHERE target_type = ? AND target_id = ?)
-            ''', (current_drug['pharmacological_group'], data['drug_id'], data['target_type'], data['target_id'])).fetchall()
-            alternatives = [dict(a) for a in alts]
+@ns_dashboard.route('/analytics')
+class Analytics(Resource):
+    @jwt_required()
+    def get(self):
+        days = int(request.args.get('days', 7))
+        start_date = datetime.utcnow() - timedelta(days=days-1)
+        start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # 1. Lấy tất cả Order trong khoảng thời gian
+        orders = Order.query.filter(Order.created_at >= start_date).all()
+        
+        total_revenue = 0
+        total_orders = len(orders)
+        
+        # Thống kê theo ngày
+        chart_data = {}
+        for d in range(days):
+            dt = (start_date + timedelta(days=d)).strftime('%Y-%m-%d')
+            chart_data[dt] = {'revenue': 0, 'cost': 0, 'profit': 0}
             
-    conn.close()
-    return jsonify({**result, 'alternatives': alternatives})
+        # Tính toán chi tiết
+        product_sales = {} # Lấy top sản phẩm
+        
+        for order in orders:
+            dt = order.created_at.strftime('%Y-%m-%d')
+            total_revenue += order.final_amount
+            if dt in chart_data:
+                chart_data[dt]['revenue'] += order.final_amount
+                
+            # Tính cost
+            order_cost = 0
+            for item in order.items:
+                product = Product.query.get(item.product_id)
+                cost = (product.cost_price or 0) * item.quantity if product else 0
+                order_cost += cost
+                
+                # Thống kê sản phẩm
+                if product:
+                    if product.id not in product_sales:
+                        product_sales[product.id] = {'name': product.name, 'qty': 0, 'rev': 0}
+                    product_sales[product.id]['qty'] += item.quantity
+                    product_sales[product.id]['rev'] += item.subtotal
 
-@app.route('/api/ai-analyze', methods=['POST'])
-def ai_analyze():
-    data = request.json
-    response = call_ai(data['prompt'])
-    return jsonify({'response': response})
+            if dt in chart_data:
+                chart_data[dt]['cost'] += order_cost
+                # Lợi nhuận = Doanh thu hóa đơn - Chi phí hàng (Lưu ý: chưa trừ discount phân bổ chính xác nhưng có thể lấy final_amount - cost)
+                chart_data[dt]['profit'] += (order.final_amount - order_cost)
 
-@app.route('/api/stats')
-def get_stats():
-    conn = get_db_connection()
-    counts = {
-        'drugs': conn.execute('SELECT count(*) FROM drugs').fetchone()[0],
-        'diseases': conn.execute('SELECT count(*) FROM diseases').fetchone()[0],
-        'interactions': conn.execute('SELECT count(*) FROM interactions').fetchone()[0],
-        'users': conn.execute('SELECT count(*) FROM users').fetchone()[0],
-    }
-    conn.close()
-    return jsonify(counts)
+        # Tổng hợp
+        total_profit = sum(d['profit'] for d in chart_data.values())
+        
+        # Top 5 sản phẩm
+        top_products = sorted(product_sales.values(), key=lambda x: x['rev'], reverse=True)[:5]
+        
+        return {
+            'summary': {
+                'total_revenue': total_revenue,
+                'total_profit': total_profit,
+                'total_orders': total_orders,
+                'profit_margin': round((total_profit/total_revenue*100) if total_revenue > 0 else 0, 1)
+            },
+            'chart': [
+                {'date': k[5:], 'revenue': v['revenue'], 'profit': v['profit']} 
+                for k, v in chart_data.items()
+            ],
+            'top_products': top_products
+        }
+
+@ns_products.route('/')
+class ProductList(Resource):
+    def get(self):
+        q = request.args.get('q', '')
+        products = Product.query.filter(Product.name.like(f'%{q}%')).all()
+        return [{
+            'id': p.id, 'name': p.name, 'barcode': p.barcode, 
+            'price': p.price, 'stock': p.stock_quantity, 'unit': p.unit
+        } for p in products]
+
+@ns_orders.route('/')
+class OrderList(Resource):
+    @jwt_required()
+    def get(self):
+        page       = int(request.args.get('page', 1))
+        per_page   = int(request.args.get('per_page', 20))
+        date_from  = request.args.get('date_from')
+        date_to    = request.args.get('date_to')
+        payment    = request.args.get('payment')
+        q          = request.args.get('q', '')
+
+        query = Order.query
+        if date_from:
+            query = query.filter(Order.created_at >= date_from)
+        if date_to:
+            query = query.filter(Order.created_at <= date_to + ' 23:59:59')
+        if payment:
+            query = query.filter(Order.payment_method == payment)
+        if q:
+            query = query.filter(Order.order_number.like(f'%{q}%'))
+
+        query = query.order_by(Order.created_at.desc())
+        total = query.count()
+        orders = query.offset((page - 1) * per_page).limit(per_page).all()
+
+        def fmt(o):
+            staff = User.query.get(o.staff_id)
+            return {
+                'id': o.id,
+                'order_number': o.order_number,
+                'total_amount': o.total_amount,
+                'final_amount': o.final_amount,
+                'discount': o.discount,
+                'payment_method': o.payment_method,
+                'staff_name': staff.full_name if staff else 'N/A',
+                'created_at': o.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                'item_count': len(o.items),
+            }
+
+        return {
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'orders': [fmt(o) for o in orders]
+        }
+
+@ns_orders.route('/<int:id>')
+class OrderDetail(Resource):
+    @jwt_required()
+    def get(self, id):
+        o = Order.query.get_or_404(id)
+        staff = User.query.get(o.staff_id)
+        items = []
+        for i in o.items:
+            p = Product.query.get(i.product_id)
+            items.append({
+                'product_name': p.name if p else 'Không xác định',
+                'barcode': p.barcode if p else '',
+                'quantity': i.quantity,
+                'unit_price': i.unit_price,
+                'subtotal': i.subtotal,
+            })
+        return {
+            'id': o.id,
+            'order_number': o.order_number,
+            'total_amount': o.total_amount,
+            'final_amount': o.final_amount,
+            'discount': o.discount,
+            'payment_method': o.payment_method,
+            'staff_name': staff.full_name if staff else 'N/A',
+            'created_at': o.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'items': items
+        }
+
+    @jwt_required()
+    def delete(self, id):
+        o = Order.query.get_or_404(id)
+        db.session.delete(o); db.session.commit()
+        return {'message': 'Xóa thành công'}
+
+
+# ─── STAFF: Quản lý nhân sự ────────────────────────────────────────────────
+@ns_staff.route('/')
+class StaffList(Resource):
+    @jwt_required()
+    def get(self):
+        """Lấy danh sách nhân viên"""
+        users = User.query.all()
+        return [{
+            'id': u.id,
+            'username': u.username,
+            'full_name': u.full_name,
+            'role': u.role,
+            'created_at': u.created_at.strftime('%Y-%m-%d %H:%M:%S')
+        } for u in users]
+
+    @jwt_required()
+    def post(self):
+        """Tạo nhân viên mới"""
+        data = request.json
+        if User.query.filter_by(username=data['username']).first():
+            return {'error': 'Tên đăng nhập đã tồn tại'}, 400
+        
+        hashed = generate_password_hash(data['password'])
+        new_user = User(
+            username=data['username'],
+            password=hashed,
+            full_name=data['full_name'],
+            role=data.get('role', 'staff')
+        )
+        db.session.add(new_user)
+        db.session.commit()
+        return {'message': 'Thêm nhân sự thành công', 'id': new_user.id}
+
+@ns_staff.route('/<int:id>')
+class StaffDetail(Resource):
+    @jwt_required()
+    def put(self, id):
+        """Cập nhật thông tin nhân viên"""
+        user = User.query.get_or_404(id)
+        data = request.json
+        
+        if 'full_name' in data: user.full_name = data['full_name']
+        if 'role' in data: user.role = data['role']
+        if 'password' in data and data['password']:
+            user.password = generate_password_hash(data['password'])
+            
+        db.session.commit()
+        return {'message': 'Cập nhật thành công'}
+
+    @jwt_required()
+    def delete(self, id):
+        """Xóa nhân viên"""
+        user = User.query.get_or_404(id)
+        if user.role == 'admin' and User.query.filter_by(role='admin').count() <= 1:
+            return {'error': 'Không thể xóa admin duy nhất của hệ thống'}, 400
+            
+        db.session.delete(user)
+        db.session.commit()
+        return {'message': 'Đã xóa nhân sự'}
+
+
+
+# ─── CUSTOMERS: Quản lý khách hàng ─────────────────────────────────────────
+@ns_customers.route('/')
+class CustomerList(Resource):
+    @jwt_required()
+    def get(self):
+        """Danh sách khách hàng hoặc tìm theo SĐT"""
+        q = request.args.get('q', '')
+        if q:
+            customers = Customer.query.filter(Customer.phone.like(f'%{q}%')).all()
+        else:
+            customers = Customer.query.order_by(Customer.points.desc()).all()
+            
+        return [{
+            'id': c.id,
+            'phone': c.phone,
+            'full_name': c.full_name,
+            'points': c.points,
+            'created_at': c.created_at.strftime('%Y-%m-%d')
+        } for c in customers]
+
+    @jwt_required()
+    def post(self):
+        """Thêm khách hàng mới"""
+        data = request.json
+        if Customer.query.filter_by(phone=data['phone']).first():
+            return {'error': 'Số điện thoại đã tồn tại'}, 400
+            
+        new_c = Customer(phone=data['phone'], full_name=data.get('full_name', ''), points=data.get('points', 0))
+        db.session.add(new_c)
+        db.session.commit()
+        return {'message': 'Thêm khách hàng thành công', 'id': new_c.id, 'name': new_c.full_name}
+
+@ns_customers.route('/<int:id>')
+class CustomerDetail(Resource):
+    @jwt_required()
+    def put(self, id):
+        c = Customer.query.get_or_404(id)
+        data = request.json
+        if 'full_name' in data: c.full_name = data['full_name']
+        if 'points' in data: c.points = data['points']
+        db.session.commit()
+        return {'message': 'Đã cập nhật khách hàng'}
+        
+    @jwt_required()
+    def delete(self, id):
+        c = Customer.query.get_or_404(id)
+        db.session.delete(c)
+        db.session.commit()
+        return {'message': 'Đã xóa khách hàng'}
+
+# ─── PAYOS: Thanh toán online ───────────────────────────────────────────────
+
+@ns_payment.route('/create')
+class PayOSCreate(Resource):
+    @jwt_required()
+    def post(self):
+        """Tạo link thanh toán PayOS từ giỏ hàng"""
+        current_user = get_jwt_identity()
+        data = request.json  # { items:[{product_id, quantity}] }
+
+        # Tính toán đơn hàng
+        order_code  = int(time.time())  # unique int code
+        items_data  = []
+        total       = 0
+
+        for item in data.get('items', []):
+            product = Product.query.get(item['product_id'])
+            if not product:
+                return {'error': f'Sản phẩm #{item["product_id"]} không tồn tại'}, 404
+            qty      = item['quantity']
+            items_data.append(
+                ItemData(name=product.name[:25], quantity=qty, price=int(product.price))
+            )
+        
+        total       = data.get('total_amount', 0)
+        discount    = data.get('discount', 0)
+        customer_id = data.get('customer_id') # Có thể None
+        
+        if total <= 0:
+            return {'error': 'Giỏ hàng trống'}, 400
+
+        # Tạo PaymentData chuẩn mới
+        payment_data = CreatePaymentLinkRequest(
+            orderCode   = order_code,
+            amount      = total - discount,
+            description = f"MiniMart #{order_code % 100000}",
+            items       = items_data,
+            cancelUrl   = "http://localhost:5173/payment/cancel",
+            returnUrl   = "http://localhost:5173/payment/success",
+        )
+
+        try:
+            response = payos.payment_requests.create(payment_data)
+            # Lưu đơn hàng tạm (chưa trừ kho) với trạng thái pending
+            new_order = Order(
+                order_number  = f"POS-{order_code}",
+                total_amount  = total,
+                discount      = discount,
+                final_amount  = total - discount,
+                payment_method= 'PayOS',
+                staff_id      = current_user_id,
+                customer_id   = customer_id
+            )
+            for item in data.get('items', []):
+                p   = Product.query.get(item['product_id'])
+                qty = item['quantity']
+                new_order.items.append(OrderItem(
+                    product_id = p.id,
+                    quantity   = qty,
+                    unit_price = p.price,
+                    subtotal   = p.price * qty,
+                ))
+            db.session.add(new_order)
+            db.session.commit()
+
+            return {
+                'checkout_url': response.checkout_url,
+                'order_code':   order_code,
+                'order_id':     new_order.id,
+                'amount':       total,
+            }
+        except Exception as e:
+            return {'error': str(e)}, 500
+
+
+@ns_payment.route('/webhook')
+class PayOSWebhook(Resource):
+    def post(self):
+        """Nhận callback từ PayOS khi thanh toán hoàn tất"""
+        try:
+            webhook_data = payos.webhooks.verify(request.json)
+            order_code   = str(webhook_data.order_code)
+
+            # Tìm đơn hàng theo order_number
+            order = Order.query.filter(Order.order_number == f"POS-{order_code}").first()
+            if order and webhook_data.code == '00':
+                # Trừ kho sau khi thanh toán thành công
+                for item in order.items:
+                    product = Product.query.get(item.product_id)
+                    if product and product.stock_quantity >= item.quantity:
+                        product.stock_quantity -= item.quantity
+            
+                # Tích điểm/Trừ điểm nếu có khách hàng
+                if order.customer_id:
+                    customer = Customer.query.get(order.customer_id)
+                    if customer:
+                        # Trừ điểm đã dùng (1 điểm = 1000đ discount)
+                        if order.discount > 0:
+                            customer.points -= int(order.discount / 1000)
+                        # Cộng điểm đơn hàng mới (1% hóa đơn = x điểm)
+                        customer.points += int(order.final_amount / 10000) # 10k = 1 điểm
+
+            db.session.commit()
+            return jsonify({'success': True})
+        except Exception as e:
+            return {'error': str(e)}, 400
+
+
+@ns_payment.route('/status/<int:order_code>')
+class PayOSStatus(Resource):
+    @jwt_required()
+    def get(self, order_code):
+        """Kiểm tra trạng thái thanh toán PayOS"""
+        try:
+            info = payos.payment_requests.get(order_code)
+            return {
+                'status':      info.status,
+                'amount':      info.amount,
+                'order_code':  info.id,
+            }
+        except Exception as e:
+            return {'error': str(e)}, 400
+
 
 if __name__ == '__main__':
-    if not os.path.exists(DB_PATH):
-        init_db()
-    else:
-        # Update schema if column missing (safe migration for local)
-        conn = get_db_connection()
-        try: conn.execute('SELECT icd10 FROM diseases LIMIT 1')
-        except: 
-            conn.execute('ALTER TABLE diseases ADD COLUMN icd10 TEXT')
-            conn.execute('ALTER TABLE drugs ADD COLUMN pharmacological_group TEXT')
-        conn.commit()
-        conn.close()
+    with app.app_context(): db.create_all()
     app.run(debug=True, port=5000)

@@ -1,78 +1,129 @@
 @import "tailwindcss";
 
-/* Định nghĩa biến thể Dark Mode cho Tailwind v4 */
-@variant dark (&:where(.dark, .dark *));
-
-@theme {
-  --font-sans: 'Inter', ui-sans-serif, system-ui;
-  --font-display: 'Outfit', ui-sans-serif, system-ui;
-}
+/* ══════════════════════════════════════════
+   BYTESCODE DESIGN SYSTEM — MiniMart POS
+   Font: Bricolage Grotesque (display)
+         Be Vietnam Pro (body)
+   ══════════════════════════════════════════ */
 
 :root {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f8fafc;
-  --bg-sidebar: #ffffff;
-  --bg-card: #ffffff;
-  --border: #e2e8f0;
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #94a3b8;
-  --input-bg: #ffffff;
+  /* Brand colors */
+  --bc-coral:        #ff6b5e;
+  --bc-blue:         #4a90ff;
+  --bc-teal:         #1abbb4;
+  --bc-orange:       #ff8c52;
+  --bc-coral-tint:   #ffe8e5;
+  --bc-blue-tint:    #e6efff;
+  --bc-teal-tint:    #dcf6f4;
+  --bc-orange-tint:  #ffeadc;
+  --bc-coral-700:    #e8483a;
+  --bc-blue-700:     #2b6ee0;
+  --bc-teal-700:     #128f89;
+  --bc-orange-700:   #e06f2f;
+
+  /* Ink (text) */
+  --bc-ink-900: #0e1530;
+  --bc-ink-700: #2a3358;
+  --bc-ink-500: #5c668a;
+  --bc-ink-300: #a8afc4;
+  --bc-ink-100: #e3e6ef;
+
+  /* Backgrounds */
+  --bc-bg:      #fff;
+  --bc-bg-soft: #f7f8fc;
+  --bc-bg-warm: #fff8f3;
+
+  /* Typography */
+  --bc-font-display: "Bricolage Grotesque", "Be Vietnam Pro", system-ui, sans-serif;
+  --bc-font-body:    "Be Vietnam Pro", system-ui, sans-serif;
+
+  /* Font sizes */
+  --bc-text-xs:  12px;
+  --bc-text-sm:  14px;
+  --bc-text-base:16px;
+  --bc-text-lg:  18px;
+  --bc-text-xl:  22px;
+  --bc-text-2xl: 28px;
+  --bc-text-3xl: 36px;
+  --bc-text-4xl: 48px;
+
+  /* Spacing */
+  --bc-s-1: 4px;  --bc-s-2: 8px;  --bc-s-3: 12px; --bc-s-4: 16px;
+  --bc-s-5: 24px; --bc-s-6: 32px; --bc-s-7: 48px; --bc-s-8: 64px;
+
+  /* Radius */
+  --bc-r-1: 6px;  --bc-r-2: 10px; --bc-r-3: 14px;
+  --bc-r-4: 20px; --bc-r-5: 28px; --bc-r-pill: 999px;
+
+  /* Shadows */
+  --bc-shadow-1: 0 1px 2px #0e15300f, 0 1px 3px #0e15300a;
+  --bc-shadow-2: 0 4px 12px #0e153014;
+  --bc-shadow-3: 0 12px 28px #0e15301f;
+  --bc-shadow-4: 0 24px 60px #0e153029;
+  --bc-shadow-coral: 0 10px 24px #ff6b5e47;
+  --bc-shadow-blue:  0 10px 24px #4a90ff47;
+
+  /* Motion */
+  --bc-ease-out:    cubic-bezier(.22, 1, .36, 1);
+  --bc-ease-bounce: cubic-bezier(.34, 1.56, .64, 1);
+  --bc-dur-1: .12s; --bc-dur-2: .22s; --bc-dur-3: .42s;
 }
 
-.dark {
-  --bg-primary: #020617;
-  --bg-secondary: #0f172a;
-  --bg-sidebar: #0f172a;
-  --bg-card: #1e293b;
-  --border: #1e293b;
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted: #475569;
-  --input-bg: #1e293b;
+/* ── Global reset ── */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--bc-font-body);
+  font-size: var(--bc-text-base);
+  font-weight: 400;
+  color: var(--bc-ink-900);
+  background: var(--bc-bg-soft);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Tối ưu render tiếng Việt */
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern" 1;
 }
 
-@layer base {
-  html, body {
-    background-color: var(--bg-primary) !important;
-    color: var(--text-primary) !important;
-    transition: background-color 0.3s ease, color 0.3s ease;
-    @apply font-sans antialiased;
-  }
+/* ── Display font (tiêu đề lớn) ── */
+h1, h2, h3, .font-display {
+  font-family: var(--bc-font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
-.custom-input {
-  background-color: var(--input-bg);
-  border: 1.5px solid var(--border);
-  color: var(--text-primary);
-  @apply w-full py-4 px-6 rounded-2xl outline-none transition-all duration-200;
+/* ── Mesh background ── */
+.premium-bg {
+  background-color: var(--bc-bg-soft);
+  background-image:
+    radial-gradient(ellipse at 0% 0%,   rgba(74,144,255,.08) 0, transparent 55%),
+    radial-gradient(ellipse at 100% 0%, rgba(255,107,94,.07) 0, transparent 55%),
+    radial-gradient(ellipse at 50% 100%,rgba(26,187,180,.06) 0, transparent 55%);
 }
 
-.custom-input:focus {
-  @apply border-blue-500 ring-4 ring-blue-500/10;
+/* ── Glass panel ── */
+.glass-panel {
+  background: rgba(255,255,255,0.78);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.7);
+  box-shadow: var(--bc-shadow-2);
 }
 
-.input-with-icon { @apply pl-14; }
-
-.role-card {
-  @apply p-6 rounded-3xl border-2 transition-all duration-300 flex flex-col items-center gap-3 cursor-pointer relative overflow-hidden;
-  background-color: var(--bg-card);
+/* ── Gradient text ── */
+.gradient-text {
+  background: linear-gradient(135deg, var(--bc-ink-900) 0%, var(--bc-blue-700) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
-.role-card.active-doctor {
-  @apply border-blue-500 bg-blue-500/5 text-blue-500;
+/* ── Scrollbar ── */
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--bc-ink-100);
+  border-radius: var(--bc-r-pill);
 }
-
-.role-card.active-pharmacist {
-  @apply border-emerald-500 bg-emerald-500/5 text-emerald-500;
-}
-
-.glass-card {
-  background-color: var(--bg-card);
-  border: 1px solid var(--border);
-  @apply rounded-[2rem];
-}
-
-.theme-bg { background-color: var(--bg-primary); }
-.theme-text { color: var(--text-primary); }
-.theme-border { border-color: var(--border); }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--bc-ink-300); }

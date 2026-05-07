@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Pill, Info, AlertCircle, Activity } from 'lucide-react';
+import { Search, Pill, Info, AlertCircle, Activity, ChevronRight, Zap } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 
 const DrugLookup = () => {
@@ -30,96 +31,128 @@ const DrugLookup = () => {
   };
 
   return (
-    <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-      <form onSubmit={handleSearch} className="relative max-w-2xl">
+    <div className="space-y-10">
+      <motion.form 
+        initial={{ y: -10, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        onSubmit={handleSearch} 
+        className="relative max-w-2xl group"
+      >
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Nhập tên thuốc hoặc hoạt chất..."
-          className="w-full pl-12 pr-4 py-4 rounded-2xl dark:bg-slate-800 bg-white dark:text-white text-slate-900 border dark:border-slate-700 border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none shadow-lg transition-colors"
+          className="custom-input pl-14 pr-6 py-5 group-hover:border-blue-500/50"
         />
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-      </form>
+        <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={20} />
+        {loading && (
+           <div className="absolute right-6 top-1/2 -translate-y-1/2">
+             <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+           </div>
+        )}
+      </motion.form>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-1 space-y-4">
-          <h3 className="font-bold dark:text-slate-200 text-slate-800 px-2">Kết quả ({drugs.length})</h3>
-          <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-            {drugs.map((drug) => (
-              <button
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+        <div className="lg:col-span-1 space-y-6">
+          <h3 className="text-xs font-black uppercase tracking-[0.2em] opacity-40 px-4">Kết quả ({drugs.length})</h3>
+          <div className="space-y-4 max-h-[600px] overflow-y-auto pr-4 custom-scrollbar">
+            {drugs.map((drug, i) => (
+              <motion.button
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ delay: i * 0.05 }}
                 key={drug.id}
                 onClick={() => setSelectedDrug(drug)}
-                className={`w-full text-left p-4 rounded-2xl border transition-all ${
+                className={`w-full text-left p-6 rounded-[2rem] border transition-all duration-300 ${
                   selectedDrug?.id === drug.id 
-                    ? 'border-blue-500 dark:bg-blue-900/30 bg-blue-50 shadow-md' 
-                    : 'dark:border-slate-800 border-slate-100 dark:bg-slate-900 bg-white hover:border-blue-300 dark:hover:border-blue-700'
+                    ? 'border-blue-500 bg-blue-500/5 shadow-xl shadow-blue-500/10' 
+                    : 'theme-border bg-white/50 dark:bg-slate-900/50 hover:border-blue-500/30'
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  <div className="p-2 dark:bg-blue-900/50 bg-blue-100 text-blue-500 dark:text-blue-400 rounded-lg">
-                    <Pill size={18} />
+                <div className="flex items-center gap-4">
+                  <div className={`p-3 rounded-xl transition-colors ${selectedDrug?.id === drug.id ? 'bg-blue-600 text-white' : 'bg-blue-500/10 text-blue-500'}`}>
+                    <Pill size={20} />
                   </div>
-                  <div>
-                    <h4 className="font-bold dark:text-white text-slate-800">{drug.name}</h4>
-                    <p className="text-xs dark:text-slate-500 text-slate-500 truncate">{drug.ingredients}</p>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-black theme-text tracking-tight truncate uppercase">{drug.name}</h4>
+                    <p className="text-[10px] font-black uppercase tracking-widest opacity-40 truncate">{drug.ingredients}</p>
                   </div>
+                  <ChevronRight size={16} className={`transition-transform ${selectedDrug?.id === drug.id ? 'translate-x-1 opacity-100' : 'opacity-0'}`} />
                 </div>
-              </button>
+              </motion.button>
             ))}
           </div>
         </div>
 
         <div className="lg:col-span-2">
-          {selectedDrug ? (
-            <div className="dark:bg-slate-900 bg-white border dark:border-slate-800 border-slate-100 p-8 rounded-3xl shadow-xl sticky top-8 transition-colors">
-              <div className="flex justify-between items-start mb-8">
-                <div>
-                  <h2 className="text-3xl font-bold dark:text-white text-slate-800 mb-2">{selectedDrug.name}</h2>
-                  <span className="dark:bg-blue-900/50 bg-blue-100 dark:text-blue-400 text-blue-700 px-3 py-1 rounded-lg text-sm font-semibold">
-                    Hoạt chất: {selectedDrug.ingredients}
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-6">
-                  <section>
-                    <h4 className="flex items-center gap-2 font-bold text-emerald-500 mb-2">
-                      <Info size={18} /> Chỉ định
-                    </h4>
-                    <p className="dark:text-slate-400 text-slate-600 leading-relaxed">{selectedDrug.indications}</p>
-                  </section>
-                  <section>
-                    <h4 className="flex items-center gap-2 font-bold dark:text-slate-200 text-slate-800 mb-2">
-                      <Activity size={18} /> Liều dùng
-                    </h4>
-                    <p className="dark:text-slate-400 text-slate-600 leading-relaxed">{selectedDrug.dosage}</p>
-                  </section>
+          <AnimatePresence mode="wait">
+            {selectedDrug ? (
+              <motion.div 
+                key={selectedDrug.id}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="glass-card p-10 sticky top-32 overflow-hidden"
+              >
+                <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none">
+                  <Activity size={160} className="text-blue-600" />
                 </div>
 
-                <div className="space-y-6">
-                  <section>
-                    <h4 className="flex items-center gap-2 font-bold text-rose-500 mb-2">
-                      <AlertCircle size={18} /> Chống chỉ định
-                    </h4>
-                    <p className="dark:text-slate-400 text-slate-600 leading-relaxed">{selectedDrug.contraindications}</p>
-                  </section>
-                  <section>
-                    <h4 className="flex items-center gap-2 font-bold text-amber-500 mb-2">
-                      <AlertCircle size={18} /> Tác dụng phụ
-                    </h4>
-                    <p className="dark:text-slate-400 text-slate-600 leading-relaxed">{selectedDrug.side_effects}</p>
-                  </section>
+                <div className="flex justify-between items-start mb-12 relative z-10">
+                  <div>
+                    <h2 className="text-4xl font-black theme-text tracking-tighter uppercase mb-4">{selectedDrug.name}</h2>
+                    <div className="inline-flex items-center gap-2 bg-blue-600 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-500/20">
+                      <Zap size={14} /> Hoạt chất: {selectedDrug.ingredients}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          ) : (
-            <div className="h-[400px] flex flex-col items-center justify-center dark:text-slate-600 text-slate-400 dark:bg-slate-900 bg-white border dark:border-slate-800 border-slate-100 rounded-3xl p-8 transition-colors">
-              <Pill size={48} className="mb-4 opacity-20" />
-              <p className="text-lg">Chọn một loại thuốc để xem chi tiết</p>
-            </div>
-          )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10 relative z-10">
+                  <div className="space-y-8">
+                    <section className="glass p-6 rounded-3xl border-emerald-500/10 hover:border-emerald-500/30 transition-all">
+                      <h4 className="flex items-center gap-2 font-black text-emerald-500 uppercase tracking-widest text-xs mb-4">
+                        <Info size={16} /> Chỉ định
+                      </h4>
+                      <p className="theme-text opacity-70 leading-relaxed font-medium">{selectedDrug.indications}</p>
+                    </section>
+                    <section className="glass p-6 rounded-3xl border-blue-500/10 hover:border-blue-500/30 transition-all">
+                      <h4 className="flex items-center gap-2 font-black text-blue-500 uppercase tracking-widest text-xs mb-4">
+                        <Activity size={16} /> Liều dùng
+                      </h4>
+                      <p className="theme-text opacity-70 leading-relaxed font-medium">{selectedDrug.dosage}</p>
+                    </section>
+                  </div>
+
+                  <div className="space-y-8">
+                    <section className="glass p-6 rounded-3xl border-rose-500/10 hover:border-rose-500/30 transition-all">
+                      <h4 className="flex items-center gap-2 font-black text-rose-500 uppercase tracking-widest text-xs mb-4">
+                        <AlertCircle size={16} /> Chống chỉ định
+                      </h4>
+                      <p className="theme-text opacity-70 leading-relaxed font-medium">{selectedDrug.contraindications}</p>
+                    </section>
+                    <section className="glass p-6 rounded-3xl border-amber-500/10 hover:border-amber-500/30 transition-all">
+                      <h4 className="flex items-center gap-2 font-black text-amber-500 uppercase tracking-widest text-xs mb-4">
+                        <AlertCircle size={16} /> Tác dụng phụ
+                      </h4>
+                      <p className="theme-text opacity-70 leading-relaxed font-medium">{selectedDrug.side_effects}</p>
+                    </section>
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="h-[500px] flex flex-col items-center justify-center glass-card p-10 opacity-60"
+              >
+                <div className="w-24 h-24 bg-slate-500/5 rounded-[2rem] flex items-center justify-center mb-6">
+                  <Pill size={64} className="opacity-20 text-slate-500" />
+                </div>
+                <p className="text-xl font-black uppercase tracking-[0.2em] opacity-40">Chọn thuốc để xem chi tiết</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>
@@ -127,3 +160,4 @@ const DrugLookup = () => {
 };
 
 export default DrugLookup;
+
