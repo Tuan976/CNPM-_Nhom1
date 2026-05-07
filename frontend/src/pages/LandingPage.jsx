@@ -122,8 +122,65 @@ export default function LandingPage() {
       </main>
 
       {/* ── FOOTER ── */}
-      <footer className="py-8 text-center text-slate-400 text-[13px] border-t border-slate-200 bg-white">
-        <p className="font-medium">© 2026 MiniMart POS System. Phát triển bởi CNPM_Nhom1.</p>
+      <footer className="pt-16 pb-8 border-t border-slate-200 bg-white">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-16 text-left">
+            
+            {/* Cột 1: Thông tin chung */}
+            <div className="col-span-1 md:col-span-1">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-bold text-sm"
+                     style={{ background: 'linear-gradient(135deg,var(--bc-blue),var(--bc-blue-700))' }}>
+                  M
+                </div>
+                <h2 className="text-xl font-bold" style={{ ...fd, color: 'var(--bc-ink-900)' }}>
+                  MiniMart
+                </h2>
+              </div>
+              <p className="text-[13px] text-slate-500 leading-relaxed mb-4">
+                Giải pháp phần mềm quản lý điểm bán hàng chuyên nghiệp, nhanh chóng và tối ưu hóa trải nghiệm khách hàng cho chuỗi siêu thị.
+              </p>
+            </div>
+
+            {/* Cột 2: Sản phẩm */}
+            <div>
+              <h4 className="text-[14px] font-bold mb-4" style={{ color: 'var(--bc-ink-900)' }}>Sản phẩm</h4>
+              <ul className="space-y-3 text-[13px] text-slate-500 font-medium">
+                <li><a href="#" className="hover:text-blue-600 transition-colors">Tính năng POS</a></li>
+                <li><a href="#" className="hover:text-blue-600 transition-colors">Quản lý Kho</a></li>
+                <li><a href="#" className="hover:text-blue-600 transition-colors">Khách hàng thân thiết</a></li>
+                <li><a href="#" className="hover:text-blue-600 transition-colors">Tích hợp PayOS</a></li>
+              </ul>
+            </div>
+
+            {/* Cột 3: Pháp lý (Điều khoản) */}
+            <div>
+              <h4 className="text-[14px] font-bold mb-4" style={{ color: 'var(--bc-ink-900)' }}>Pháp lý & Điều khoản</h4>
+              <ul className="space-y-3 text-[13px] text-slate-500 font-medium">
+                <li><a href="#" className="hover:text-blue-600 transition-colors">Điều khoản dịch vụ</a></li>
+                <li><a href="#" className="hover:text-blue-600 transition-colors">Chính sách bảo mật</a></li>
+                <li><a href="#" className="hover:text-blue-600 transition-colors">Chính sách hoàn tiền</a></li>
+                <li><a href="#" className="hover:text-blue-600 transition-colors">Giải quyết khiếu nại</a></li>
+              </ul>
+            </div>
+
+            {/* Cột 4: Liên hệ */}
+            <div>
+              <h4 className="text-[14px] font-bold mb-4" style={{ color: 'var(--bc-ink-900)' }}>Liên hệ</h4>
+              <ul className="space-y-3 text-[13px] text-slate-500 font-medium">
+                <li>Hotline: 1800-xxxx-xxxx</li>
+                <li>Email: hotro@minimart.vn</li>
+                <li>Địa chỉ: Khu Công nghệ cao, TP. Thủ Đức, TP.HCM</li>
+              </ul>
+            </div>
+
+          </div>
+
+          <div className="pt-8 border-t border-slate-100 flex flex-col md:flex-row items-center justify-between gap-4 text-center text-slate-400 text-[13px] font-medium">
+            <p>© 2026 MiniMart POS System. Phát triển bởi CNPM_Nhom1.</p>
+            <p>Hệ thống được thiết kế với giao diện Premium Tech.</p>
+          </div>
+        </div>
       </footer>
     </div>
   );
