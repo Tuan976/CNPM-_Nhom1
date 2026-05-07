@@ -1,211 +1,130 @@
-import React, { useContext, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { AuthContext } from '../App';
-import { useTheme } from '../context/ThemeContext';
-import Footer from '../components/Footer';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Activity, Pill, Stethoscope, ArrowLeftRight, Sparkles, 
-  ShieldCheck, Sun, Moon, Menu, X, ChevronRight, Zap
-} from 'lucide-react';
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { ShoppingCart, Smartphone, LineChart, ShieldCheck, Zap, ArrowRight, Star } from 'lucide-react';
 
-const LandingPage = () => {
-  const { user } = useContext(AuthContext);
-  const { theme, toggleTheme } = useTheme();
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+const fd = { fontFamily: '"Bricolage Grotesque", "Be Vietnam Pro", sans-serif' };
+const fb = { fontFamily: '"Be Vietnam Pro", sans-serif' };
 
-  const navLinks = [
-    { label: 'Tính năng', href: '#features' },
-    { label: 'Giải pháp', href: '#solutions' },
-    { label: 'Về chúng tôi', href: '#about' }
+export default function LandingPage() {
+  const navigate = useNavigate();
+
+  const features = [
+    {
+      icon: ShoppingCart,
+      title: "Bán hàng thần tốc",
+      desc: "Giao diện thu ngân tối giản, hỗ trợ quét mã vạch và xử lý giỏ hàng nhanh chóng chỉ trong vài giây.",
+      color: "var(--bc-teal)",
+      tint: "var(--bc-teal-tint)"
+    },
+    {
+      icon: Smartphone,
+      title: "Tích hợp PayOS",
+      desc: "Chấp nhận thanh toán bằng mọi ngân hàng qua mã QR động PayOS. Tự động xác nhận giao dịch qua Webhook.",
+      color: "var(--bc-blue)",
+      tint: "var(--bc-blue-tint)"
+    },
+    {
+      icon: Star,
+      title: "Khách hàng Loyalty",
+      desc: "Quản lý khách hàng thân thiết, tích điểm tự động và quy đổi điểm thành chiết khấu cho lần mua sau.",
+      color: "var(--bc-orange)",
+      tint: "var(--bc-orange-tint)"
+    },
+    {
+      icon: LineChart,
+      title: "Phân tích Real-time",
+      desc: "Báo cáo doanh thu, lợi nhuận, và theo dõi top sản phẩm bán chạy nhất bằng biểu đồ trực quan, sinh động.",
+      color: "var(--bc-coral)",
+      tint: "var(--bc-coral-tint)"
+    }
   ];
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: { staggerChildren: 0.2 }
-    }
-  };
-
-  const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: {
-      y: 0,
-      opacity: 1,
-      transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] }
-    }
-  };
-
   return (
-    <div className={`min-h-screen transition-colors duration-500 mesh-gradient ${theme === 'dark' ? 'dark text-white' : 'text-slate-900'}`}>
-      {/* Navigation */}
-      <nav className="fixed w-full z-50 glass">
-        <div className="container mx-auto px-6 py-4 flex justify-between items-center">
-          <motion.div 
-            initial={{ x: -20, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            className="flex items-center gap-3"
-          >
-            <div className="bg-blue-600 p-2.5 rounded-2xl text-white shadow-xl shadow-blue-500/20 animate-float">
-              <Activity size={24} />
-            </div>
-            <span className="text-2xl font-black tracking-tighter uppercase">MediCheck AI</span>
-          </motion.div>
-
-          {/* Desktop Nav */}
-          <div className="hidden md:flex items-center gap-10">
-            {navLinks.map((item) => (
-              <a key={item.label} href={item.href} className="text-sm font-bold opacity-60 hover:opacity-100 hover:text-blue-500 transition-all">
-                {item.label}
-              </a>
-            ))}
-            <div className="h-4 w-[1px] bg-slate-300 dark:bg-slate-700" />
-            <button onClick={toggleTheme} className="p-3 rounded-2xl bg-white/10 border border-white/10 hover:border-blue-500/50 transition-all active:scale-90 shadow-sm">
-              {theme === 'dark' ? <Sun size={20} className="text-yellow-400" /> : <Moon size={20} className="text-slate-600" />}
-            </button>
-            {user ? (
-              <Link to="/dashboard" className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-2xl font-black transition-all hover:shadow-[0_0_30px_rgba(37,99,235,0.4)] hover:-translate-y-0.5">
-                Vào Dashboard
-              </Link>
-            ) : (
-              <div className="flex items-center gap-6">
-                <Link to="/login" className="text-sm font-black hover:text-blue-500 transition-colors">Đăng nhập</Link>
-                <Link to="/register" className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-2xl font-black transition-all shadow-xl shadow-blue-500/20">Dùng thử</Link>
-              </div>
-            )}
+    <div className="min-h-screen bg-slate-50 flex flex-col" style={fb}>
+      {/* ── HEADER ── */}
+      <header className="absolute top-0 w-full px-8 py-6 flex items-center justify-between z-50">
+        <div className="flex items-center gap-2">
+          <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-white text-lg font-bold"
+               style={{ background: 'linear-gradient(135deg,var(--bc-blue),var(--bc-blue-700))', boxShadow: 'var(--bc-shadow-blue)' }}>
+            M
           </div>
-          
-          {/* Mobile Menu Button */}
-          <div className="md:hidden flex items-center gap-4">
-            <button onClick={toggleTheme} className="p-2.5 rounded-xl bg-white/10 border border-white/10">
-               {theme === 'dark' ? <Sun size={20} className="text-yellow-400" /> : <Moon size={20} className="text-slate-600" />}
-            </button>
-            <button className="p-2" onClick={() => setIsMenuOpen(!isMenuOpen)}>
-              {isMenuOpen ? <X size={28} /> : <Menu size={28} />}
-            </button>
-          </div>
+          <h1 className="text-2xl font-bold leading-none" style={{ ...fd, color: 'var(--bc-ink-900)', letterSpacing: '-0.03em' }}>
+            Mini<span style={{ color: 'var(--bc-coral)' }}>Mart</span>
+          </h1>
         </div>
-        
-        {/* Mobile Menu Content */}
-        <AnimatePresence>
-          {isMenuOpen && (
-            <motion.div 
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="md:hidden glass overflow-hidden"
-            >
-              <div className="p-8 space-y-8">
-                {navLinks.map((item) => (
-                  <a key={item.label} href={item.href} onClick={() => setIsMenuOpen(false)} className="block text-2xl font-black">
-                    {item.label}
-                  </a>
-                ))}
-                <div className="h-[1px] bg-white/10 w-full" />
-                {user ? (
-                  <Link to="/dashboard" className="block w-full bg-blue-600 text-white text-center py-5 rounded-[2rem] font-black text-xl shadow-xl shadow-blue-500/20">Vào Dashboard</Link>
-                ) : (
-                  <div className="space-y-6">
-                    <Link to="/login" className="block text-center font-black text-xl">Đăng nhập</Link>
-                    <Link to="/register" className="block w-full bg-blue-600 text-white text-center py-5 rounded-[2rem] font-black text-xl shadow-xl shadow-blue-500/20">Bắt đầu ngay</Link>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </nav>
+        <button onClick={() => navigate('/login')}
+          className="px-6 py-2.5 rounded-full text-[14px] font-bold text-white transition-all hover:scale-105"
+          style={{ background: 'var(--bc-ink-900)', boxShadow: '0 8px 20px rgba(14,21,48,0.2)' }}>
+          Đăng nhập hệ thống
+        </button>
+      </header>
 
-      {/* Hero Section */}
-      <section className="relative pt-64 pb-32 overflow-hidden px-6">
-        <div className="absolute top-0 right-0 w-[80%] h-[80%] bg-blue-500/20 rounded-full blur-[150px] -translate-y-1/2 translate-x-1/4 animate-pulse-slow" />
-        <div className="container mx-auto relative z-10 text-center space-y-12">
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.8 }}
-          >
-            <span className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-500 text-sm font-black uppercase tracking-[0.2em] mb-10">
-              <Zap size={14} /> Kỷ nguyên y tế thông minh
-            </span>
-            <h1 className="text-6xl md:text-8xl font-black leading-[0.95] tracking-tighter mb-10">
-              Kê đơn an toàn hơn với<br />
-              <span className="bg-gradient-to-br from-blue-600 via-cyan-500 to-indigo-600 bg-clip-text text-transparent drop-shadow-sm">
-                Trí tuệ Nhân tạo.
+      {/* ── HERO SECTION ── */}
+      <main className="flex-1 flex flex-col justify-center relative overflow-hidden pt-20 pb-20">
+        
+        {/* Background Elements */}
+        <div className="absolute top-[-10%] right-[-5%] w-[600px] h-[600px] rounded-full blur-[100px] opacity-40"
+             style={{ background: 'radial-gradient(circle, var(--bc-blue-tint) 0%, transparent 70%)' }} />
+        <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] rounded-full blur-[100px] opacity-40"
+             style={{ background: 'radial-gradient(circle, var(--bc-teal-tint) 0%, transparent 70%)' }} />
+
+        <div className="max-w-6xl mx-auto px-6 w-full relative z-10 text-center">
+          <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-8 border border-slate-200 bg-white shadow-sm">
+              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-600">
+                <Zap size={12} fill="currentColor" />
+              </span>
+              <span className="text-[12px] font-bold text-slate-700">Phiên bản 2.0 đã ra mắt với PayOS Checkout</span>
+            </div>
+            
+            <h1 className="text-5xl md:text-7xl font-extrabold mb-6" style={{ ...fd, color: 'var(--bc-ink-900)', letterSpacing: '-0.04em', lineHeight: 1.1 }}>
+              Giải pháp POS hoàn hảo cho <br />
+              <span className="text-transparent bg-clip-text" style={{ backgroundImage: 'linear-gradient(135deg, var(--bc-blue), var(--bc-teal))' }}>
+                Siêu thị hiện đại
               </span>
             </h1>
-            <p className="text-xl md:text-2xl opacity-60 max-w-3xl mx-auto leading-relaxed font-medium">
-              Giải pháp tối ưu hỗ trợ bác sĩ và dược sĩ phát hiện tức thì các tương tác thuốc nguy hiểm và chống chỉ định bệnh lý chỉ trong vài giây.
+            
+            <p className="text-lg md:text-xl text-slate-500 max-w-2xl mx-auto mb-10" style={{ lineHeight: 1.6 }}>
+              Hệ thống bán hàng cực mượt, tích hợp thanh toán mã QR động tự động nhận diện và quản lý khách hàng thân thiết thông minh.
             </p>
+            
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <button onClick={() => navigate('/login')}
+                className="flex items-center gap-2 px-8 py-4 rounded-2xl text-[16px] font-bold text-white transition-all hover:-translate-y-1"
+                style={{ background: 'linear-gradient(135deg, var(--bc-blue), var(--bc-blue-700))', boxShadow: 'var(--bc-shadow-blue)' }}>
+                Bắt đầu kinh doanh ngay <ArrowRight size={20} />
+              </button>
+              <a href="https://payos.vn/" target="_blank" rel="noreferrer"
+                className="flex items-center gap-2 px-8 py-4 rounded-2xl text-[16px] font-bold transition-all hover:-translate-y-1 bg-white border border-slate-200"
+                style={{ color: 'var(--bc-ink-700)', boxShadow: 'var(--bc-shadow-1)' }}>
+                <ShieldCheck size={20} className="text-emerald-500" /> Được bảo mật bởi PayOS
+              </a>
+            </div>
           </motion.div>
-          
-          <motion.div 
-            initial={{ y: 30, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.4, duration: 0.8 }}
-            className="flex flex-col md:flex-row items-center justify-center gap-6 pt-10"
-          >
-            <Link to="/register" className="group relative bg-blue-600 text-white px-12 py-6 rounded-[2rem] font-black text-xl transition-all shadow-2xl shadow-blue-500/40 hover:shadow-blue-500/60 overflow-hidden">
-              <span className="relative z-10 flex items-center gap-3">
-                Bắt đầu ngay miễn phí <ChevronRight className="group-hover:translate-x-2 transition-transform" />
-              </span>
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
-            </Link>
-            <a href="#features" className="px-10 py-6 rounded-[2rem] border-2 border-slate-300 dark:border-slate-800 font-black text-xl hover:bg-slate-100 dark:hover:bg-slate-900 transition-all">
-              Tìm hiểu thêm
-            </a>
+
+          {/* ── FEATURES GRID ── */}
+          <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.2 }}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-24 text-left">
+            {features.map((f, i) => (
+              <div key={i} className="bg-white p-8 rounded-3xl transition-all hover:-translate-y-2 group"
+                   style={{ boxShadow: 'var(--bc-shadow-1)', border: '1px solid var(--bc-ink-100)' }}>
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-6 transition-transform group-hover:scale-110"
+                     style={{ background: f.tint }}>
+                  <f.icon size={28} style={{ color: f.color }} />
+                </div>
+                <h3 className="text-xl font-bold mb-3" style={{ ...fd, color: 'var(--bc-ink-900)' }}>{f.title}</h3>
+                <p className="text-[14px] text-slate-500 leading-relaxed">{f.desc}</p>
+              </div>
+            ))}
           </motion.div>
         </div>
-      </section>
+      </main>
 
-      {/* Features */}
-      <section id="features" className="py-32 container mx-auto px-6 scroll-mt-24">
-        <motion.div 
-          variants={containerVariants}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          className="grid grid-cols-1 md:grid-cols-3 gap-12"
-        >
-          {[
-            { 
-              title: 'Tra cứu đa dạng', 
-              desc: 'Tìm kiếm theo tên biệt dược hoặc hoạt chất Generic chuẩn xác với dữ liệu từ Dược thư quốc gia.', 
-              icon: <Pill size={32} className="text-blue-500" />,
-              color: 'blue'
-            },
-            { 
-              title: 'Chuẩn hóa ICD-10', 
-              desc: 'Dữ liệu bệnh lý được phân loại theo mã ICD-10 quốc tế, giúp chẩn đoán và kiểm tra chống chỉ định chính xác.', 
-              icon: <Stethoscope size={32} className="text-emerald-500" />,
-              color: 'emerald'
-            },
-            { 
-              title: 'Gợi ý thay thế', 
-              desc: 'Tự động gợi ý thuốc an toàn hơn trong cùng nhóm dược lý khi phát hiện tương tác không mong muốn.', 
-              icon: <ArrowLeftRight size={32} className="text-orange-500" />,
-              color: 'orange'
-            }
-          ].map((f, i) => (
-            <motion.div 
-              key={i} 
-              variants={itemVariants}
-              className="glass-card p-12 group"
-            >
-               <div className={`mb-8 bg-${f.color}-500/10 w-20 h-20 rounded-[2rem] flex items-center justify-center group-hover:scale-110 group-hover:rotate-6 transition-transform duration-500`}>
-                {f.icon}
-               </div>
-               <h3 className="text-3xl font-black mb-6">{f.title}</h3>
-               <p className="text-lg opacity-60 leading-relaxed font-medium">{f.desc}</p>
-            </motion.div>
-          ))}
-        </motion.div>
-      </section>
-
-      <Footer />
+      {/* ── FOOTER ── */}
+      <footer className="py-8 text-center text-slate-400 text-[13px] border-t border-slate-200 bg-white">
+        <p className="font-medium">© 2026 MiniMart POS System. Phát triển bởi CNPM_Nhom1.</p>
+      </footer>
     </div>
   );
-};
-
-export default LandingPage;
+}

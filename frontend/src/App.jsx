@@ -4,6 +4,7 @@ import { AuthProvider, AuthContext } from './context/AuthContext';
 import LoginPage from './pages/LoginPage';
 import UserDashboard from './pages/UserDashboard';
 import PaymentResult from './pages/PaymentResult';
+import LandingPage from './pages/LandingPage';
 
 const PrivateRoute = ({ children }) => {
   const { token } = React.useContext(AuthContext);
@@ -19,7 +20,7 @@ function App() {
           <Route path="/dashboard" element={<PrivateRoute><UserDashboard /></PrivateRoute>} />
           <Route path="/payment/success" element={<PaymentResult type="success" />} />
           <Route path="/payment/cancel"  element={<PaymentResult type="cancel" />} />
-          <Route path="/" element={<Navigate to="/login" />} />
+          <Route path="/" element={<LandingPage />} />
         </Routes>
       </Router>
     </AuthProvider>
