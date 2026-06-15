@@ -6,7 +6,7 @@ from flask_restx import Api, Resource
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
-from models import db, User, Product, Category, Order, OrderItem, Customer
+from models import db, User, Product, Category, Order, OrderItem, Customer, Supplier, Promotion
 from datetime import datetime, timedelta
 from sqlalchemy import func
 import google.generativeai as genai
@@ -32,10 +32,19 @@ payos = PayOS(
 app = Flask(__name__)
 CORS(app)
 
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(BASE_DIR, 'supermarket.db')}"
+import urllib.parse
+db_server = os.getenv("DB_SERVER", "(localdb)\\MSSQLLocalDB")
+db_name = os.getenv("DB_NAME", "SupermarketPOS")
+params = urllib.parse.quote_plus(
+    f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+    f"SERVER={db_server};"
+    f"DATABASE={db_name};"
+    f"Trusted_Connection=yes;"
+)
+app.config['SQLALCHEMY_DATABASE_URI'] = f"mssql+pyodbc:///?odbc_connect={params}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_SECRET_KEY'] = 'supermarket-pos-secret-2026'
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=30)
 
 db.init_app(app)
 jwt = JWTManager(app)
@@ -50,6 +59,8 @@ ns_orders    = api.namespace('api/orders',    description='Lịch sử giao dị
 ns_payment   = api.namespace('api/payment',   description='PayOS thanh toán')
 ns_staff     = api.namespace('api/staff',     description='Quản lý nhân sự')
 ns_customers = api.namespace('api/customers', description='Quản lý khách hàng')
+ns_suppliers = api.namespace('api/suppliers', description='Quản lý nhà cung cấp')
+ns_promotions= api.namespace('api/promotions',description='Quản lý khuyến mãi')
 
 # --- AUTH ---
 @ns_auth.route('/login')
@@ -93,12 +104,16 @@ class Checkout(Resource):
         total = 0
         discount = data.get('discount', 0)
         customer_id = data.get('customer_id')
+        promotion_id = data.get('promotion_id')
+        counter_number = data.get('counter_number', 1)
 
         new_order = Order(
             order_number=f"HD-{datetime.utcnow().strftime('%y%m%d%H%M%S')}",
             staff_id=current_user['id'],
             payment_method=data.get('payment_method', 'Cash'),
-            customer_id=customer_id
+            counter_number=counter_number,
+            customer_id=customer_id,
+            promotion_id=promotion_id
         )
         
         for item in data['items']:
@@ -142,9 +157,9 @@ class Summary(Resource):
     def get(self):
         today = datetime.utcnow().date()
         # Doanh thu hôm nay
-        revenue_today = db.session.query(func.sum(Order.final_amount)).filter(func.date(Order.created_at) == today).scalar() or 0
+        revenue_today = db.session.query(func.sum(Order.final_amount)).filter(db.cast(Order.created_at, db.Date) == today).scalar() or 0
         # Tổng đơn hàng hôm nay
-        orders_today = Order.query.filter(func.date(Order.created_at) == today).count()
+        orders_today = Order.query.filter(db.cast(Order.created_at, db.Date) == today).count()
         # Sản phẩm sắp hết hàng
         low_stock = Product.query.filter(Product.stock_quantity < 10).count()
         
@@ -452,6 +467,8 @@ class PayOSCreate(Resource):
         total       = data.get('total_amount', 0)
         discount    = data.get('discount', 0)
         customer_id = data.get('customer_id') # Có thể None
+        promotion_id = data.get('promotion_id')
+        counter_number = data.get('counter_number', 1)
         
         if total <= 0:
             return {'error': 'Giỏ hàng trống'}, 400
@@ -475,8 +492,10 @@ class PayOSCreate(Resource):
                 discount      = discount,
                 final_amount  = total - discount,
                 payment_method= 'PayOS',
-                staff_id      = current_user_id,
-                customer_id   = customer_id
+                counter_number= counter_number,
+                staff_id      = current_user['id'],
+                customer_id   = customer_id,
+                promotion_id  = promotion_id
             )
             for item in data.get('items', []):
                 p   = Product.query.get(item['product_id'])
@@ -548,7 +567,112 @@ class PayOSStatus(Resource):
         except Exception as e:
             return {'error': str(e)}, 400
 
+@ns_suppliers.route('/')
+class SupplierList(Resource):
+    @jwt_required()
+    def get(self):
+        suppliers = Supplier.query.all()
+        return [{'id': s.id, 'name': s.name, 'contact_info': s.contact_info} for s in suppliers]
 
+    @jwt_required()
+    def post(self):
+        data = request.json
+        new_sup = Supplier(name=data['name'], contact_info=data.get('contact_info', ''))
+        db.session.add(new_sup)
+        db.session.commit()
+        return {'message': 'Thêm nhà cung cấp thành công', 'id': new_sup.id}
+
+@ns_suppliers.route('/<int:id>')
+class SupplierDetail(Resource):
+    @jwt_required()
+    def put(self, id):
+        sup = Supplier.query.get_or_404(id)
+        data = request.json
+        if 'name' in data: sup.name = data['name']
+        if 'contact_info' in data: sup.contact_info = data['contact_info']
+        db.session.commit()
+        return {'message': 'Đã cập nhật nhà cung cấp'}
+
+    @jwt_required()
+    def delete(self, id):
+        sup = Supplier.query.get_or_404(id)
+        db.session.delete(sup)
+        db.session.commit()
+        return {'message': 'Đã xóa nhà cung cấp'}
+
+@ns_promotions.route('/')
+class PromotionList(Resource):
+    @jwt_required()
+    def get(self):
+        promos = Promotion.query.all()
+        return [{
+            'id': p.id, 'code': p.code, 'description': p.description,
+            'discount_percent': p.discount_percent, 'active': p.active,
+            'start_date': p.start_date.strftime('%Y-%m-%d %H:%M:%S') if p.start_date else None,
+            'end_date': p.end_date.strftime('%Y-%m-%d %H:%M:%S') if p.end_date else None
+        } for p in promos]
+
+    @jwt_required()
+    def post(self):
+        data = request.json
+        new_p = Promotion(
+            code=data['code'],
+            description=data.get('description', ''),
+            discount_percent=data['discount_percent'],
+            active=data.get('active', True)
+        )
+        if data.get('start_date'):
+            new_p.start_date = datetime.strptime(data['start_date'], '%Y-%m-%d')
+        if data.get('end_date'):
+            new_p.end_date = datetime.strptime(data['end_date'], '%Y-%m-%d')
+            
+        db.session.add(new_p)
+        db.session.commit()
+        return {'message': 'Thêm khuyến mãi thành công', 'id': new_p.id}
+
+@ns_promotions.route('/<int:id>')
+class PromotionDetail(Resource):
+    @jwt_required()
+    def put(self, id):
+        p = Promotion.query.get_or_404(id)
+        data = request.json
+        if 'code' in data: p.code = data['code']
+        if 'description' in data: p.description = data['description']
+        if 'discount_percent' in data: p.discount_percent = data['discount_percent']
+        if 'active' in data: p.active = data['active']
+        if 'start_date' in data and data['start_date']:
+            p.start_date = datetime.strptime(data['start_date'], '%Y-%m-%d')
+        if 'end_date' in data and data['end_date']:
+            p.end_date = datetime.strptime(data['end_date'], '%Y-%m-%d')
+        db.session.commit()
+        return {'message': 'Đã cập nhật khuyến mãi'}
+
+    @jwt_required()
+    def delete(self, id):
+        p = Promotion.query.get_or_404(id)
+        db.session.delete(p)
+        db.session.commit()
+        return {'message': 'Đã xóa khuyến mãi'}
+        
+@ns_promotions.route('/check/<code>')
+class PromotionCheck(Resource):
+    def get(self, code):
+        p = Promotion.query.filter_by(code=code, active=True).first()
+        if not p:
+            return {'error': 'Mã khuyến mãi không hợp lệ hoặc đã hết hạn'}, 404
+            
+        now = datetime.utcnow()
+        if p.start_date and now < p.start_date:
+            return {'error': 'Mã khuyến mãi chưa có hiệu lực'}, 400
+        if p.end_date and now > p.end_date:
+            return {'error': 'Mã khuyến mãi đã hết hạn'}, 400
+            
+        return {
+            'id': p.id,
+            'code': p.code,
+            'discount_percent': p.discount_percent,
+            'description': p.description
+        }
 if __name__ == '__main__':
     with app.app_context(): db.create_all()
     app.run(debug=True, port=5000)

@@ -8,7 +8,9 @@ import OrderHistory from '../components/OrderHistory';
 import StaffManager from '../components/StaffManager';
 import CustomerManager from '../components/CustomerManager';
 import RevenueReport from '../components/RevenueReport';
-import { Gift, BarChart3 } from 'lucide-react';
+import SupplierManager from '../components/SupplierManager';
+import PromotionManager from '../components/PromotionManager';
+import { Gift, BarChart3, Truck, Tag } from 'lucide-react';
 
 const menuItems = [
   { id: 'home',      label: 'Dashboard',         icon: LayoutDashboard },
@@ -17,6 +19,8 @@ const menuItems = [
   { id: 'inventory', label: 'Kho sản phẩm',       icon: Package },
   { id: 'orders',    label: 'Lịch sử giao dịch',  icon: FileText },
   { id: 'customers', label: 'Khách hàng',         icon: Gift },
+  { id: 'suppliers', label: 'Nhà cung cấp',       icon: Truck },
+  { id: 'promotions',label: 'Khuyến mãi',         icon: Tag },
   { id: 'staff',     label: 'Đội ngũ nhân sự',    icon: Users },
 ];
 
@@ -133,8 +137,10 @@ export default function UserDashboard() {
           {activeTab === 'inventory' && <InventoryManager />}
           {activeTab === 'orders'    && <OrderHistory />}
           {activeTab === 'customers' && <CustomerManager />}
+          {activeTab === 'suppliers' && <SupplierManager />}
+          {activeTab === 'promotions'&& <PromotionManager />}
           {activeTab === 'staff'     && <StaffManager />}
-          {!['home','analytics','pos','inventory','orders','customers','staff'].includes(activeTab) && (
+          {!['home','analytics','pos','inventory','orders','customers','suppliers','promotions','staff'].includes(activeTab) && (
             <div className="h-48 flex flex-col items-center justify-center gap-3" style={{ color: 'var(--bc-ink-300)' }}>
               <TrendingUp size={40} />
               <p className="text-sm font-semibold">Đang phát triển...</p>

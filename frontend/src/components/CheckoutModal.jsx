@@ -16,39 +16,42 @@ const METHODS = [
 const QR_URL = (amount) =>
   `https://img.vietqr.io/image/VCB-1234567890-compact2.png?amount=${amount}&addInfo=MiniMart+POS&accountName=MINIMART+STORE`;
 
-export default function CheckoutModal({ cart, total, onClose, onSuccess }) {
+export default function CheckoutModal({ cart, total, discountAmount, finalAmount, loyaltyDiscount, promoDiscount, customer, promotion, counterNumber, onClose, onSuccess }) {
   const [step, setStep]           = useState(1);
   const [method, setMethod]       = useState('');
   const [cashGiven, setCashGiven] = useState('');
   const [loading, setLoading]     = useState(false);
   const [orderId, setOrderId]     = useState(null);
   const [orderNumber, setOrderNumber] = useState('');
-
-  // Khách hàng
-  const [phoneInput, setPhoneInput] = useState('');
-  const [customer, setCustomer]     = useState(null);
-  const [usePoints, setUsePoints]   = useState(false);
-  const [searchTimeout, setSearchTimeout] = useState(null);
-
-  const handlePhoneChange = (val) => {
-    setPhoneInput(val); setCustomer(null); setUsePoints(false);
-    if (searchTimeout) clearTimeout(searchTimeout);
-    if (val.length >= 9) {
-      setSearchTimeout(setTimeout(async () => {
-        try {
-          const res = await axios.get(`http://localhost:5000/api/customers/?q=${val}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-          if (res.data.length > 0) setCustomer(res.data[0]);
-        } catch(e) {}
-      }, 500));
-    }
-  };
-
-  const discountAmount = (usePoints && customer) ? Math.min(total, customer.points * 1000) : 0;
-  const finalAmount    = total - discountAmount;
+  const [payOsUrl, setPayOsUrl]   = useState('');
 
   const change   = Math.max(0, (parseFloat(cashGiven) || 0) - finalAmount);
   const canPay   = method === 'QR' || (method === 'Cash' && parseFloat(cashGiven) >= finalAmount);
   const now      = new Date();
+
+  const currentQrUrl = method === 'PayOS' && payOsUrl 
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(payOsUrl)}`
+    : QR_URL(finalAmount);
+
+  const channelRef = React.useRef(null);
+  React.useEffect(() => {
+    channelRef.current = new BroadcastChannel('pos_customer_display');
+    return () => {
+      if (channelRef.current) {
+        channelRef.current.postMessage({ type: 'CHECKOUT_UPDATE', checkoutState: null });
+        channelRef.current.close();
+      }
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (channelRef.current) {
+      channelRef.current.postMessage({
+        type: 'CHECKOUT_UPDATE',
+        checkoutState: { step, method, cashGiven, change, qrUrl: currentQrUrl, loading, isSuccess: step === 3 }
+      });
+    }
+  }, [step, method, cashGiven, change, loading, currentQrUrl]);
 
   const handleConfirm = async () => {
     setLoading(true);
@@ -57,6 +60,8 @@ export default function CheckoutModal({ cart, total, onClose, onSuccess }) {
         items: cart.map(i => ({ product_id: i.id, quantity: i.qty })),
         payment_method: method,
         customer_id: customer?.id,
+        promotion_id: promotion?.id,
+        counter_number: parseInt(counterNumber) || 1,
         discount: discountAmount,
         total_amount: total
       }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
@@ -78,11 +83,15 @@ export default function CheckoutModal({ cart, total, onClose, onSuccess }) {
       const res = await axios.post('http://localhost:5000/api/payment/create', {
         items: cart.map(i => ({ product_id: i.id, quantity: i.qty })),
         customer_id: customer?.id,
+        promotion_id: promotion?.id,
+        counter_number: parseInt(counterNumber) || 1,
         discount: discountAmount,
         total_amount: total
       }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-      // Redirect sang trang thanh toán PayOS
-      window.location.href = res.data.checkout_url;
+      
+      setPayOsUrl(res.data.checkout_url);
+      setMethod('PayOS');
+      setStep(2);
     } catch (e) {
       if (e.response?.status === 401) {
         alert('Phiên đăng nhập đã hết hạn. Vui lòng đăng xuất và đăng nhập lại!');
@@ -141,6 +150,7 @@ export default function CheckoutModal({ cart, total, onClose, onSuccess }) {
       <div class="meta">
         <strong>Số HĐ:</strong> ${orderNumber}<br>
         <strong>Thời gian:</strong> ${timeStr}<br>
+        <strong>Quầy số:</strong> ${counterNumber}<br>
         <strong>Thanh toán:</strong> <span class="badge">${methodLabel}</span>
       </div>
       <hr class="divider"/>
@@ -157,7 +167,8 @@ export default function CheckoutModal({ cart, total, onClose, onSuccess }) {
             <td colspan="3" style="color:#5c668a;">Tổng cộng:</td>
             <td style="text-align:right;font-weight:700;">${total.toLocaleString('vi-VN')}đ</td>
           </tr>
-          ${discountAmount > 0 ? `<tr class="total-row"><td colspan="3" style="color:#5c668a;">Giảm giá (Điểm):</td><td style="text-align:right;font-weight:700;color:#ff6b5e;">-${discountAmount.toLocaleString('vi-VN')}đ</td></tr>` : ''}
+          ${loyaltyDiscount > 0 ? `<tr class="total-row"><td colspan="3" style="color:#5c668a;">Giảm giá (Điểm):</td><td style="text-align:right;font-weight:700;color:#ff6b5e;">-${loyaltyDiscount.toLocaleString('vi-VN')}đ</td></tr>` : ''}
+          ${promoDiscount > 0 ? `<tr class="total-row"><td colspan="3" style="color:#5c668a;">Khuyến mãi (${promotion?.discount_percent}%):</td><td style="text-align:right;font-weight:700;color:#1abbb4;">-${promoDiscount.toLocaleString('vi-VN')}đ</td></tr>` : ''}
           ${cashRows}
           <tr class="grand-total">
             <td colspan="3">THANH TOÁN:</td>
@@ -200,27 +211,8 @@ export default function CheckoutModal({ cart, total, onClose, onSuccess }) {
               <button onClick={onClose} className="p-2 rounded-2xl hover:bg-slate-100 text-slate-400"><X size={20}/></button>
             </div>
 
-            {/* Tóm tắt đơn hàng & Khách hàng */}
+            {/* Tóm tắt đơn hàng */}
             <div className="mx-8 mt-4 space-y-3">
-              {/* Box Khách hàng */}
-              <div className="p-4 rounded-2xl" style={{ background:'var(--bc-orange-tint)', border:'1px solid rgba(255,140,82,0.2)' }}>
-                <input value={phoneInput} onChange={e => handlePhoneChange(e.target.value)}
-                  placeholder="Nhập SĐT tích điểm..."
-                  className="w-full text-[13px] font-semibold outline-none bg-transparent mb-2 placeholder:text-orange-300"
-                  style={{ color:'var(--bc-orange-700)' }} />
-                {customer && (
-                  <div className="flex items-center justify-between text-[12px] pt-2 border-t" style={{ borderColor:'rgba(255,140,82,0.2)', color:'var(--bc-orange-700)' }}>
-                    <span>{customer.full_name} ({customer.points} điểm)</span>
-                    {customer.points > 0 && (
-                      <label className="flex items-center gap-1 cursor-pointer">
-                        <input type="checkbox" checked={usePoints} onChange={e => setUsePoints(e.target.checked)} />
-                        Dùng điểm
-                      </label>
-                    )}
-                  </div>
-                )}
-              </div>
-
               {/* Box Bill */}
               <div className="p-4 rounded-2xl" style={{ background:'var(--bc-bg-soft)', border:'1px solid var(--bc-ink-100)' }}>
                 <div className="space-y-2 max-h-32 overflow-y-auto custom-scrollbar">
@@ -232,10 +224,16 @@ export default function CheckoutModal({ cart, total, onClose, onSuccess }) {
                   ))}
                 </div>
                 <div className="mt-3 pt-3 flex flex-col gap-1 border-t" style={{ borderColor:'var(--bc-ink-100)' }}>
-                  {usePoints && (
+                  {loyaltyDiscount > 0 && (
                     <div className="flex justify-between text-[12px] font-medium" style={{ color:'var(--bc-coral)' }}>
-                      <span>Giảm giá (Điểm)</span>
-                      <span>-{discountAmount.toLocaleString('vi-VN')}đ</span>
+                      <span>Giảm điểm</span>
+                      <span>-{loyaltyDiscount.toLocaleString('vi-VN')}đ</span>
+                    </div>
+                  )}
+                  {promoDiscount > 0 && (
+                    <div className="flex justify-between text-[12px] font-medium" style={{ color:'var(--bc-teal)' }}>
+                      <span>Khuyến mãi</span>
+                      <span>-{promoDiscount.toLocaleString('vi-VN')}đ</span>
                     </div>
                   )}
                   <div className="flex justify-between items-center">
@@ -328,8 +326,8 @@ export default function CheckoutModal({ cart, total, onClose, onSuccess }) {
           </>
         )}
 
-        {/* ── STEP 2b: QR ── */}
-        {step === 2 && method === 'QR' && (
+        {/* ── STEP 2b: QR & PayOS ── */}
+        {step === 2 && (method === 'QR' || method === 'PayOS') && (
           <>
             <div className="px-8 py-6 flex items-center gap-3 border-b" style={{ borderColor:'var(--bc-ink-100)' }}>
               <button onClick={() => setStep(1)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400"><ArrowLeft size={18}/></button>
@@ -341,22 +339,29 @@ export default function CheckoutModal({ cart, total, onClose, onSuccess }) {
             <div className="px-8 py-6 space-y-5">
               <div className="flex flex-col items-center gap-4">
                 <div className="p-4 rounded-3xl" style={{ background:'white', border:'2px solid var(--bc-ink-100)', boxShadow:'var(--bc-shadow-2)' }}>
-                  <img src={QR_URL(total)} alt="QR thanh toán" className="w-52 h-52 object-contain" onError={e => e.target.style.display='none'} />
+                  <img src={currentQrUrl} alt="QR thanh toán" className="w-52 h-52 object-contain" onError={e => e.target.style.display='none'} />
                   {/* Fallback nếu QR lỗi */}
                   <div className="w-52 h-52 flex flex-col items-center justify-center gap-3" style={{ color:'var(--bc-ink-300)' }}>
                     <QrCode size={64} style={{ color:'var(--bc-blue)' }} />
-                    <p className="text-[11px] font-semibold text-center" style={fb}>QR đang tải... <br/>STK: 1234567890 · VCB</p>
+                    <p className="text-[11px] font-semibold text-center" style={fb}>QR đang tải...</p>
                   </div>
                 </div>
                 <div className="text-center">
-                  <p className="text-[12px] font-medium mb-1" style={{ ...fb, color:'var(--bc-ink-400)' }}>Số tiền cần chuyển khoản</p>
-                  <p className="text-3xl font-bold" style={{ ...fd, color:'var(--bc-blue)', letterSpacing:'-0.04em' }}>{total.toLocaleString('vi-VN')}đ</p>
+                  <p className="text-[12px] font-medium mb-1" style={{ ...fb, color:'var(--bc-ink-400)' }}>Số tiền cần thanh toán</p>
+                  <p className="text-3xl font-bold" style={{ ...fd, color:'var(--bc-blue)', letterSpacing:'-0.04em' }}>{finalAmount.toLocaleString('vi-VN')}đ</p>
                 </div>
-                <div className="w-full p-4 rounded-2xl text-center" style={{ background:'var(--bc-blue-tint)', border:'1px solid rgba(74,144,255,0.2)' }}>
-                  <p className="text-[12px] font-semibold" style={{ ...fb, color:'var(--bc-blue-700)' }}>
-                    Nội dung: <strong>MINIMART {Date.now().toString().slice(-6)}</strong>
-                  </p>
-                </div>
+                {method === 'QR' && (
+                  <div className="w-full p-4 rounded-2xl text-center" style={{ background:'var(--bc-blue-tint)', border:'1px solid rgba(74,144,255,0.2)' }}>
+                    <p className="text-[12px] font-semibold" style={{ ...fb, color:'var(--bc-blue-700)' }}>
+                      Nội dung: <strong>MINIMART {Date.now().toString().slice(-6)}</strong>
+                    </p>
+                  </div>
+                )}
+                {method === 'PayOS' && (
+                  <div className="w-full p-3 rounded-2xl text-center" style={{ background:'#f5f3ff', border:'1px solid #ddd6fe' }}>
+                    <p className="text-[12px] font-bold text-purple-700 uppercase">Hỗ trợ bởi PayOS</p>
+                  </div>
+                )}
               </div>
 
               <button onClick={handleConfirm} disabled={loading}

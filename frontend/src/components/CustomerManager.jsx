@@ -31,7 +31,7 @@ function CustomerModal({ customer, onClose, onSuccess }) {
       }
       onSuccess();
     } catch (err) {
-      setError(err.response?.data?.error || 'Lỗi lưu khách hàng');
+      setError(err.response?.data?.error || err.response?.data?.msg || err.message || 'Lỗi lưu khách hàng');
     }
     setLoading(false);
   };
@@ -58,7 +58,7 @@ function CustomerModal({ customer, onClose, onSuccess }) {
           
           <div>
             <label className="text-[12px] font-semibold block mb-2" style={{ color: 'var(--bc-ink-500)' }}>Số điện thoại *</label>
-            <input value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})}
+            <input value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value.replace(/\D/g, '').slice(0, 11)})}
               disabled={isEdit} type="tel" placeholder="09xxxx..."
               className="w-full rounded-2xl text-[14px] font-bold outline-none disabled:opacity-50"
               style={{ padding:'12px 16px', background:'var(--bc-bg-soft)', border:'2px solid var(--bc-ink-100)' }}

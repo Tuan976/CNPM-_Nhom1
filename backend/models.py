@@ -18,6 +18,23 @@ class Category(db.Model):
     name = db.Column(db.String(100), nullable=False)
     products = db.relationship('Product', backref='category', lazy=True)
 
+class Supplier(db.Model):
+    __tablename__ = 'suppliers'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    contact_info = db.Column(db.String(255))
+    products = db.relationship('Product', backref='supplier', lazy=True)
+
+class Promotion(db.Model):
+    __tablename__ = 'promotions'
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(50), unique=True, nullable=False)
+    description = db.Column(db.String(255))
+    discount_percent = db.Column(db.Float, nullable=False)
+    active = db.Column(db.Boolean, default=True)
+    start_date = db.Column(db.DateTime, default=datetime.utcnow)
+    end_date = db.Column(db.DateTime)
+
 class Product(db.Model):
     __tablename__ = 'products'
     id = db.Column(db.Integer, primary_key=True)
@@ -29,6 +46,7 @@ class Product(db.Model):
     unit = db.Column(db.String(50), default='Cái')
     image_url = db.Column(db.String(512))
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'))
+    supplier_id = db.Column(db.Integer, db.ForeignKey('suppliers.id'))
 
 class Order(db.Model):
     __tablename__ = 'orders'
@@ -38,8 +56,10 @@ class Order(db.Model):
     discount = db.Column(db.Float, default=0)
     final_amount = db.Column(db.Float, nullable=False)
     payment_method = db.Column(db.String(50), default='Cash') # Cash, QR, Card
+    counter_number = db.Column(db.Integer, default=1) # Số quầy thu ngân
     staff_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     customer_id = db.Column(db.Integer, db.ForeignKey('customers.id'), nullable=True)
+    promotion_id = db.Column(db.Integer, db.ForeignKey('promotions.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     items = db.relationship('OrderItem', backref='order', lazy=True)
 

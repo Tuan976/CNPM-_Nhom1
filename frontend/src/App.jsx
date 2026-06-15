@@ -6,6 +6,7 @@ import RegisterPage from './pages/RegisterPage';
 import UserDashboard from './pages/UserDashboard';
 import PaymentResult from './pages/PaymentResult';
 import LandingPage from './pages/LandingPage';
+import CustomerDisplay from './pages/CustomerDisplay';
 import { TermsOfService, PrivacyPolicy, RefundPolicy, DisputeResolution } from './pages/LegalPages';
 
 const PrivateRoute = ({ children }) => {
@@ -27,6 +28,7 @@ function App() {
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/refund" element={<RefundPolicy />} />
           <Route path="/dispute" element={<DisputeResolution />} />
+          <Route path="/customer-display" element={<CustomerDisplay />} />
           <Route path="/" element={<LandingPage />} />
         </Routes>
       </Router>

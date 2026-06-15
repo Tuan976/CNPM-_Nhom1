@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MiniMart POS - Bản thử nghiệm tĩnh</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700;800&family=Bricolage+Grotesque:wght@600;700;800&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Be Vietnam Pro"', 'sans-serif'],
+                        display: ['"Bricolage Grotesque"', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            blue: '#1a56db',
+                            'blue-dark': '#1e429f',
+                            coral: '#f05252',
+                            'coral-dark': '#c81e1e',
+                            teal: '#0e9f6e',
+                            dark: '#111928'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- React and ReactDOM CDN -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- Babel CDN (for parsing JSX) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body {
+            background-color: #f3f4f6;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(219, 234, 254, 0.4) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(253, 244, 245, 0.4) 0px, transparent 50%);
+        }
+        .premium-shadow {
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.02);
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af;
+        }
+    </style>
+</head>
+<body class="font-sans antialiased text-gray-800">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // Custom Inline SVGs for zero dependency icons
+        function Icon({ name, className = "w-5 h-5" }) {
+            const icons = {
+                dashboard: (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                        <rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="11" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>
+                    </svg>
+                ),
+                cart: (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                        <circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>
+                    </svg>
+                ),
+                package: (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                        <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>
+                    </svg>
+                ),
+                users: (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                ),
+                chevronRight: (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                        <path d="m9 18 6-6-6-6"/>
+                    </svg>
+                ),
+                bell: (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                        <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+                    </svg>
+                ),
+                logout: (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>
+                    </svg>
+                ),
+                plus: (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                        <path d="M5 12h14"/><path d="M12 5v14"/>
+                    </svg>
+                ),
+                minus: (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                        <path d="M5 12h14"/>
+                    </svg>
+                ),
+                trash: (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                        <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                    </svg>
+                ),
+                search: (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+                    </svg>
+                ),
+                x: (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                        <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+                    </svg>
+                ),
+                check: (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                        <path d="M20 6 9 17l-5-5"/>
+                    </svg>
+                ),
+                tag: (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                        <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.586-6.586a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r="1.5"/>
+                    </svg>
+                ),
+                phone: (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+                    </svg>
+                ),
+                barcode: (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                        <path d="M3 5v14"/><path d="M8 5v14"/><path d="M12 5v14"/><path d="M17 5v14"/><path d="M21 5v14"/>
+                    </svg>
+                )
+            };
+            return icons[name] || <span className="text-xs">?</span>;
+        }
+
+        const initialProducts = [
+            { id: 1, name: 'Sữa tươi TH True Milk 1L', barcode: '8936039100012', price: 35000, costPrice: 28000, stock: 95, unit: 'Hộp', category: 'Đồ uống' },
+            { id: 2, name: 'Coca-Cola 330ml', barcode: '8935049500010', price: 10000, costPrice: 7000, stock: 184, unit: 'Lon', category: 'Đồ uống' },
+            { id: 3, name: 'Mì tôm Hảo Hảo Tôm Chua Cay', barcode: '8934563301234', price: 4500, costPrice: 3200, stock: 450, unit: 'Gói', category: 'Thực phẩm' },
+            { id: 4, name: 'Bánh Snack Lay\'s Classic 95g', barcode: '8934563305555', price: 22000, costPrice: 16500, stock: 48, unit: 'Gói', category: 'Đồ ăn vặt' },
+            { id: 5, name: 'Nước rửa chén Sunlight Trà Xanh 750g', barcode: '8934563309999', price: 29000, costPrice: 22500, stock: 26, unit: 'Chai', category: 'Hóa phẩm' },
+            { id: 6, name: 'Bánh mì tươi Kinh Đô sốt bơ', barcode: '8934563301111', price: 15000, costPrice: 10500, stock: 15, unit: 'Cái', category: 'Thực phẩm' },
+            { id: 7, name: 'Nước khoáng Lavie 500ml', barcode: '8934563302222', price: 6000, costPrice: 3500, stock: 295, unit: 'Chai', category: 'Đồ uống' },
+            { id: 8, name: 'Dầu ăn Simply 1L', barcode: '8934563303333', price: 58000, costPrice: 48000, stock: 32, unit: 'Chai', category: 'Gia vị' }
+        ];
+
+        const initialCustomers = [
+            { id: 1, phone: '0987654321', fullName: 'Nguyễn Văn A', points: 150 },
+            { id: 2, phone: '0912345678', fullName: 'Trần Thị B', points: 80 },
+            { id: 3, phone: '0909090909', fullName: 'Lê Văn C', points: 0 }
+        ];
+
+        function App() {
+            const [activeTab, setActiveTab] = useState('pos');
+            const [products, setProducts] = useState(initialProducts);
+            const [customers, setCustomers] = useState(initialCustomers);
+            const [cart, setCart] = useState([]);
+            
+            // POS state
+            const [searchQuery, setSearchQuery] = useState('');
+            const [customerPhone, setCustomerPhone] = useState('');
+            const [selectedCustomer, setSelectedCustomer] = useState(null);
+            const [promoCode, setPromoCode] = useState('');
+            const [discountPercent, setDiscountPercent] = useState(0);
+            const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+            const [isCheckingOut, setIsCheckingOut] = useState(false);
+            const [checkoutStep, setCheckoutStep] = useState(1); // 1: QR Payment, 2: Receipt printed
+            const [currentReceiptNumber, setCurrentReceiptNumber] = useState('');
+
+            // Management states
+            const [showAddProductModal, setShowAddProductModal] = useState(false);
+            const [newProduct, setNewProduct] = useState({ name: '', barcode: '', price: '', costPrice: '', stock: '', unit: '', category: 'Đồ uống' });
+            const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
+            const [newCustomer, setNewCustomer] = useState({ phone: '', fullName: '', points: 0 });
+
+            // Dashboard statistics (computed from state)
+            const stats = useMemo(() => {
+                return {
+                    revenue: 24850000,
+                    orders: 142,
+                    totalProducts: products.length,
+                    totalCustomers: customers.length
+                };
+            }, [products, customers]);
+
+            // Filter products in POS
+            const filteredProducts = useMemo(() => {
+                if (!searchQuery) return products;
+                const q = searchQuery.toLowerCase();
+                return products.filter(p => 
+                    p.name.toLowerCase().includes(q) || 
+                    p.barcode.includes(q) || 
+                    p.category.toLowerCase().includes(q)
+                );
+            }, [products, searchQuery]);
+
+            // Lookup customer on phone input change
+            useEffect(() => {
+                const cleanedPhone = customerPhone.replace(/\D/g, '').slice(0, 11);
+                if (cleanedPhone !== customerPhone) {
+                    setCustomerPhone(cleanedPhone);
+                }
+                const found = customers.find(c => c.phone === cleanedPhone);
+                if (found) {
+                    setSelectedCustomer(found);
+                } else {
+                    setSelectedCustomer(null);
+                }
+            }, [customerPhone, customers]);
+
+            // Handle Promo Code
+            useEffect(() => {
+                if (promoCode === 'KM10') setDiscountPercent(10);
+                else if (promoCode === 'KM20') setDiscountPercent(20);
+                else setDiscountPercent(0);
+            }, [promoCode]);
+
+            // POS Actions
+            const addToCart = (product) => {
+                if (product.stock <= 0) {
+                    alert('Sản phẩm đã hết hàng!');
+                    return;
+                }
+                const existing = cart.find(item => item.product.id === product.id);
+                if (existing) {
+                    if (existing.quantity >= product.stock) {
+                        alert('Không thể thêm vì vượt quá số lượng tồn kho!');
+                        return;
+                    }
+                    setCart(cart.map(item => 
+                        item.product.id === product.id 
+                            ? { ...item, quantity: item.quantity + 1 }
+                            : item
+                    ));
+                } else {
+                    setCart([...cart, { product, quantity: 1 }]);
+                }
+            };
+
+            const updateCartQuantity = (productId, delta) => {
+                const item = cart.find(i => i.product.id === productId);
+                if (!item) return;
+                const newQty = item.quantity + delta;
+                if (newQty <= 0) {
+                    setCart(cart.filter(i => i.product.id !== productId));
+                } else {
+                    if (newQty > item.product.stock) {
+                        alert('Số lượng vượt quá tồn kho hiện tại!');
+                        return;
+                    }
+                    setCart(cart.map(i => 
+                        i.product.id === productId ? { ...i, quantity: newQty } : i
+                    ));
+                }
+            };
+
+            const removeFromCart = (productId) => {
+                setCart(cart.filter(i => i.product.id !== productId));
+            };
+
+            // Totals
+            const cartTotal = useMemo(() => {
+                return cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+            }, [cart]);
+
+            const finalTotal = useMemo(() => {
+                const discount = (cartTotal * discountPercent) / 100;
+                return cartTotal - discount;
+            }, [cartTotal, discountPercent]);
+
+            // Checkout flow
+            const startCheckout = () => {
+                if (cart.length === 0) {
+                    alert('Giỏ hàng trống!');
+                    return;
+                }
+                setCurrentReceiptNumber(`HD-${Date.now().toString().slice(-6)}`);
+                setCheckoutStep(1);
+                setShowCheckoutModal(true);
+            };
+
+            const confirmPayment = () => {
+                setIsCheckingOut(true);
+                setTimeout(() => {
+                    // Deduct stock
+                    const updatedProducts = products.map(p => {
+                        const cartItem = cart.find(item => item.product.id === p.id);
+                        if (cartItem) {
+                            return { ...p, stock: Math.max(0, p.stock - cartItem.quantity) };
+                        }
+                        return p;
+                    });
+                    setProducts(updatedProducts);
+
+                    // Add loyalty points if customer selected
+                    if (selectedCustomer) {
+                        const pointsGained = Math.floor(finalTotal / 10000); // 10k VND = 1 point
+                        setCustomers(customers.map(c => 
+                            c.id === selectedCustomer.id 
+                                ? { ...c, points: c.points + pointsGained }
+                                : c
+                        ));
+                    }
+
+                    setIsCheckingOut(false);
+                    setCheckoutStep(2); // Go to receipt screen
+                }, 1500);
+            };
+
+            const completeCheckout = () => {
+                setCart([]);
+                setCustomerPhone('');
+                setSelectedCustomer(null);
+                setPromoCode('');
+                setShowCheckoutModal(false);
+            };
+
+            // Add Product action
+            const handleAddProductSubmit = (e) => {
+                e.preventDefault();
+                if (!newProduct.name || !newProduct.barcode || !newProduct.price || !newProduct.costPrice || !newProduct.stock) {
+                    alert('Vui lòng điền đầy đủ thông tin!');
+                    return;
+                }
+                const product = {
+                    id: products.length + 1,
+                    name: newProduct.name,
+                    barcode: newProduct.barcode,
+                    price: parseFloat(newProduct.price),
+                    costPrice: parseFloat(newProduct.costPrice),
+                    stock: parseInt(newProduct.stock),
+                    unit: newProduct.unit || 'Cái',
+                    category: newProduct.category
+                };
+                setProducts([...products, product]);
+                setNewProduct({ name: '', barcode: '', price: '', costPrice: '', stock: '', unit: '', category: 'Đồ uống' });
+                setShowAddProductModal(false);
+            };
+
+            // Add Customer action
+            const handleAddCustomerSubmit = (e) => {
+                e.preventDefault();
+                if (!newCustomer.phone || !newCustomer.fullName) {
+                    alert('Vui lòng điền số điện thoại và họ tên!');
+                    return;
+                }
+                if (customers.some(c => c.phone === newCustomer.phone)) {
+                    alert('Số điện thoại này đã đăng ký rồi!');
+                    return;
+                }
+                const customer = {
+                    id: customers.length + 1,
+                    phone: newCustomer.phone.replace(/\D/g, ''),
+                    fullName: newCustomer.fullName,
+                    points: parseInt(newCustomer.points) || 0
+                };
+                setCustomers([...customers, customer]);
+                setNewCustomer({ phone: '', fullName: '', points: 0 });
+                setShowAddCustomerModal(false);
+            };
+
+            return (
+                <div className="flex h-screen overflow-hidden text-[14px]">
+                    
+                    {/* ── SIDEBAR ── */}
+                    <aside className="w-64 bg-brand-dark text-white flex flex-col justify-between shrink-0">
+                        <div>
+                            {/* Logo */}
+                            <div className="p-6 border-b border-gray-800 flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-brand-blue to-blue-700 flex items-center justify-center font-bold text-lg text-white shadow-lg shadow-blue-900/30 font-display">
+                                    M
+                                </div>
+                                <div>
+                                    <h1 className="text-lg font-bold leading-none font-display">
+                                        Mini<span className="text-brand-coral">Mart</span>
+                                    </h1>
+                                    <p className="text-[10px] text-gray-400 font-semibold tracking-wider mt-0.5">POS SYSTEM</p>
+                                </div>
+                            </div>
+
+                            {/* Nav menu */}
+                            <nav className="p-4 space-y-1">
+                                <button onClick={() => setActiveTab('pos')}
+                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${
+                                        activeTab === 'pos' 
+                                            ? 'bg-gradient-to-r from-brand-blue to-blue-600 text-white shadow-lg shadow-blue-600/10' 
+                                            : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                                    }`}>
+                                    <Icon name="cart" />
+                                    <span>Bán hàng POS</span>
+                                </button>
+
+                                <button onClick={() => setActiveTab('dashboard')}
+                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${
+                                        activeTab === 'dashboard' 
+                                            ? 'bg-gradient-to-r from-brand-blue to-blue-600 text-white shadow-lg shadow-blue-600/10' 
+                                            : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                                    }`}>
+                                    <Icon name="dashboard" />
+                                    <span>Tổng quan doanh thu</span>
+                                </button>
+
+                                <button onClick={() => setActiveTab('products')}
+                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${
+                                        activeTab === 'products' 
+                                            ? 'bg-gradient-to-r from-brand-blue to-blue-600 text-white shadow-lg shadow-blue-600/10' 
+                                            : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                                    }`}>
+                                    <Icon name="package" />
+                                    <span>Danh mục sản phẩm</span>
+                                </button>
+
+                                <button onClick={() => setActiveTab('customers')}
+                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${
+                                        activeTab === 'customers' 
+                                            ? 'bg-gradient-to-r from-brand-blue to-blue-600 text-white shadow-lg shadow-blue-600/10' 
+                                            : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                                    }`}>
+                                    <Icon name="users" />
+                                    <span>Khách hàng thành viên</span>
+                                </button>
+                            </nav>
+                        </div>
+
+                        {/* Bottom account */}
+                        <div className="p-4 border-t border-gray-800 flex items-center justify-between bg-gray-900/50">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-xl bg-gray-800 flex items-center justify-center font-bold text-white text-sm">
+                                    Q
+                                </div>
+                                <div className="leading-tight">
+                                    <p className="text-[12px] font-semibold">Quản lý cửa hàng</p>
+                                    <span className="text-[10px] text-gray-500 font-medium">Administrator</span>
+                                </div>
+                            </div>
+                            <button className="p-1.5 text-gray-500 hover:text-brand-coral hover:bg-red-500/10 rounded-lg transition-colors">
+                                <Icon name="logout" className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </aside>
+
+                    {/* ── MAIN CONTENT ── */}
+                    <main className="flex-1 flex flex-col overflow-hidden bg-gray-50/70">
+                        {/* Header */}
+                        <header className="h-16 bg-white border-b px-6 flex items-center justify-between shrink-0">
+                            <div>
+                                <p className="text-[10px] font-bold text-brand-blue tracking-widest uppercase">Chi nhánh chính · Hoạt động</p>
+                                <h2 className="text-lg font-bold font-display text-gray-900 capitalize">
+                                    {activeTab === 'pos' && 'Màn hình bán hàng POS'}
+                                    {activeTab === 'dashboard' && 'Báo cáo tổng quan'}
+                                    {activeTab === 'products' && 'Quản lý kho hàng'}
+                                    {activeTab === 'customers' && 'Khách hàng thành viên'}
+                                </h2>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                    Hệ thống hoạt động (Demo)
+                                </div>
+                                <button className="p-2 rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors">
+                                    <Icon name="bell" className="w-5 h-5" />
+                                </button>
+                            </div>
+                        </header>
+
+                        {/* Content Area */}
+                        <div className="flex-1 overflow-y-auto p-6">
+                            
+                            {/* ── TAB: POS ── */}
+                            {activeTab === 'pos' && (
+                                <div className="h-full flex gap-6 overflow-hidden">
+                                    {/* Left: Product Selection */}
+                                    <div className="flex-1 flex flex-col gap-4 overflow-hidden h-full">
+                                        {/* Search & Scan */}
+                                        <div className="flex gap-3 bg-white p-3 rounded-2xl border premium-shadow shrink-0">
+                                            <div className="flex-1 flex items-center gap-2 bg-gray-50 border rounded-xl px-3 py-2 text-gray-400 focus-within:border-brand-blue focus-within:bg-white transition-all">
+                                                <Icon name="search" className="w-4 h-4 text-gray-400" />
+                                                <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                                                    placeholder="Tìm sản phẩm theo tên, ngành hàng hoặc mã vạch..." 
+                                                    className="w-full bg-transparent outline-none text-gray-800 placeholder-gray-400 text-xs font-medium" />
+                                            </div>
+                                        </div>
+
+                                        {/* Product Grid */}
+                                        <div className="flex-1 overflow-y-auto pr-1">
+                                            <div className="grid grid-cols-3 gap-4">
+                                                {filteredProducts.map(product => (
+                                                    <button key={product.id} onClick={() => addToCart(product)}
+                                                        className="bg-white border rounded-2xl p-4 flex flex-col justify-between text-left hover:scale-[1.02] active:scale-[0.98] transition-all hover:border-brand-blue premium-shadow group">
+                                                        <div className="w-full">
+                                                            <div className="flex justify-between items-start mb-2">
+                                                                <span className="text-[10px] px-2 py-0.5 bg-gray-100 rounded-full text-gray-500 font-semibold uppercase">{product.category}</span>
+                                                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                                                    product.stock > 10 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'
+                                                                }`}>
+                                                                    Tồn: {product.stock}
+                                                                </span>
+                                                            </div>
+                                                            <h3 className="font-bold text-gray-800 line-clamp-2 min-h-[40px] group-hover:text-brand-blue transition-colors">{product.name}</h3>
+                                                            <p className="text-[10px] text-gray-400 font-mono mt-1 flex items-center gap-1"><Icon name="barcode" className="w-3 h-3" /> {product.barcode}</p>
+                                                        </div>
+                                                        <div className="mt-4 flex justify-between items-end border-t pt-3">
+                                                            <span className="text-[11px] text-gray-400">{product.unit}</span>
+                                                            <span className="text-base font-extrabold text-brand-blue font-display">{product.price.toLocaleString('vi-VN')}đ</span>
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                                {filteredProducts.length === 0 && (
+                                                    <div className="col-span-3 text-center py-12 text-gray-400">
+                                                        Không tìm thấy sản phẩm nào phù hợp!
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Right: Cart Panel */}
+                                    <div className="w-[380px] bg-white border rounded-3xl premium-shadow flex flex-col justify-between overflow-hidden shrink-0 h-full">
+                                        {/* Cart Header */}
+                                        <div className="p-5 border-b flex justify-between items-center bg-gray-50/50">
+                                            <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                                                <Icon name="cart" className="w-5 h-5 text-brand-blue" />
+                                                <span>Giỏ hàng bán ra ({cart.length})</span>
+                                            </h3>
+                                            <button onClick={() => setCart([])} className="text-xs text-gray-400 hover:text-brand-coral font-semibold">Xóa hết</button>
+                                        </div>
+
+                                        {/* Cart List */}
+                                        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                                            {cart.map(item => (
+                                                <div key={item.product.id} className="flex gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 relative group">
+                                                    <div className="flex-1 min-w-0">
+                                                        <h4 className="font-bold text-xs text-gray-800 truncate">{item.product.name}</h4>
+                                                        <p className="text-[10px] text-gray-400 mt-0.5">{item.product.price.toLocaleString('vi-VN')}đ / {item.product.unit}</p>
+                                                        
+                                                        {/* Quantity adjustment */}
+                                                        <div className="flex items-center gap-2 mt-2">
+                                                            <button onClick={() => updateCartQuantity(item.product.id, -1)}
+                                                                className="w-6 h-6 rounded-lg bg-white border flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-90 transition-all">
+                                                                <Icon name="minus" className="w-3 h-3" />
+                                                            </button>
+                                                            <span className="font-bold text-xs w-6 text-center">{item.quantity}</span>
+                                                            <button onClick={() => updateCartQuantity(item.product.id, 1)}
+                                                                className="w-6 h-6 rounded-lg bg-white border flex items-center justify-center text-gray-500 hover:bg-gray-100 active:scale-90 transition-all">
+                                                                <Icon name="plus" className="w-3 h-3" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex flex-col justify-between items-end">
+                                                        <button onClick={() => removeFromCart(item.product.id)}
+                                                            className="p-1 rounded-lg text-gray-400 hover:text-brand-coral hover:bg-red-50/50 transition-colors">
+                                                            <Icon name="trash" className="w-3.5 h-3.5" />
+                                                        </button>
+                                                        <span className="font-extrabold text-xs text-gray-800">{(item.product.price * item.quantity).toLocaleString('vi-VN')}đ</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {cart.length === 0 && (
+                                                <div className="h-full flex flex-col items-center justify-center text-gray-400 py-12">
+                                                    <Icon name="cart" className="w-10 h-10 text-gray-300 mb-2" />
+                                                    <p className="text-xs">Chưa có sản phẩm nào trong giỏ hàng</p>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Cart Checkout Section */}
+                                        <div className="p-5 border-t bg-gray-50/50 space-y-4">
+                                            {/* Customer Lookup */}
+                                            <div className="space-y-2">
+                                                <label className="text-[11px] font-bold text-gray-500 block uppercase">Khách hàng thành viên</label>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex-1 flex items-center gap-2 bg-white border rounded-xl px-3 py-1.5">
+                                                        <Icon name="phone" className="w-3.5 h-3.5 text-gray-400" />
+                                                        <input value={customerPhone} onChange={e => setCustomerPhone(e.target.value)}
+                                                            type="tel" placeholder="Nhập SĐT khách..." 
+                                                            className="w-full bg-transparent outline-none text-xs font-semibold placeholder-gray-400" />
+                                                    </div>
+                                                    {!selectedCustomer && customerPhone.length >= 10 && (
+                                                        <button onClick={() => {
+                                                            setNewCustomer({ phone: customerPhone, fullName: '', points: 0 });
+                                                            setShowAddCustomerModal(true);
+                                                        }} className="px-3 py-1.5 bg-brand-blue text-white rounded-xl text-xs font-semibold hover:bg-brand-blue-dark">Tạo mới</button>
+                                                    )}
+                                                </div>
+                                                {selectedCustomer && (
+                                                    <div className="flex justify-between items-center p-2.5 bg-blue-50/50 border border-blue-100 rounded-xl">
+                                                        <div className="leading-tight">
+                                                            <p className="text-xs font-bold text-brand-blue">{selectedCustomer.fullName}</p>
+                                                            <span className="text-[10px] text-gray-400">SĐT: {selectedCustomer.phone}</span>
+                                                        </div>
+                                                        <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">Điểm: {selectedCustomer.points}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Promo Code */}
+                                            <div className="space-y-2">
+                                                <label className="text-[11px] font-bold text-gray-500 block uppercase">Mã giảm giá (Ví dụ: KM10, KM20)</label>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex-1 flex items-center gap-2 bg-white border rounded-xl px-3 py-1.5">
+                                                        <Icon name="tag" className="w-3.5 h-3.5 text-gray-400" />
+                                                        <input value={promoCode} onChange={e => setPromoCode(e.target.value.toUpperCase())}
+                                                            placeholder="Nhập mã KM..." 
+                                                            className="w-full bg-transparent outline-none text-xs font-semibold placeholder-gray-400" />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Pricing summary */}
+                                            <div className="space-y-2 border-t pt-3">
+                                                <div className="flex justify-between text-xs text-gray-500">
+                                                    <span>Tạm tính</span>
+                                                    <span className="font-semibold">{cartTotal.toLocaleString('vi-VN')}đ</span>
+                                                </div>
+                                                {discountPercent > 0 && (
+                                                    <div className="flex justify-between text-xs text-red-500 font-medium">
+                                                        <span>Giảm giá ({discountPercent}%)</span>
+                                                        <span>-{((cartTotal * discountPercent)/100).toLocaleString('vi-VN')}đ</span>
+                                                    </div>
+                                                )}
+                                                <div className="flex justify-between text-base font-extrabold text-gray-900 border-t border-dashed pt-2">
+                                                    <span>Tổng thanh toán</span>
+                                                    <span className="text-brand-blue font-display">{finalTotal.toLocaleString('vi-VN')}đ</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Checkout button */}
+                                            <button onClick={startCheckout}
+                                                className="w-full py-3.5 bg-gradient-to-r from-brand-coral to-red-600 text-white rounded-2xl font-bold hover:scale-[1.01] active:scale-[0.99] transition-all shadow-lg shadow-red-500/10 text-center">
+                                                Tiến hành thanh toán (PayOS QR)
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* ── TAB: DASHBOARD ── */}
+                            {activeTab === 'dashboard' && (
+                                <div className="space-y-6">
+                                    {/* Stats grid */}
+                                    <div className="grid grid-cols-4 gap-6">
+                                        <div className="bg-white p-6 rounded-3xl border premium-shadow flex items-center justify-between">
+                                            <div className="leading-tight">
+                                                <p className="text-xs text-gray-400 font-semibold">Tổng doanh thu hôm nay</p>
+                                                <h3 className="text-2xl font-extrabold text-gray-800 font-display mt-2">{stats.revenue.toLocaleString('vi-VN')}đ</h3>
+                                                <span className="text-[10px] text-emerald-500 font-bold bg-emerald-50 px-2 py-0.5 rounded-full mt-1.5 inline-block">+14.2% so với hôm qua</span>
+                                            </div>
+                                            <div className="w-12 h-12 rounded-2xl bg-blue-50 text-brand-blue flex items-center justify-center">
+                                                <Icon name="dashboard" className="w-6 h-6" />
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-white p-6 rounded-3xl border premium-shadow flex items-center justify-between">
+                                            <div className="leading-tight">
+                                                <p className="text-xs text-gray-400 font-semibold">Số lượng giao dịch (Đơn)</p>
+                                                <h3 className="text-2xl font-extrabold text-gray-800 font-display mt-2">{stats.orders}</h3>
+                                                <span className="text-[10px] text-emerald-500 font-bold bg-emerald-50 px-2 py-0.5 rounded-full mt-1.5 inline-block">+8.6% so với hôm qua</span>
+                                            </div>
+                                            <div className="w-12 h-12 rounded-2xl bg-red-50 text-brand-coral flex items-center justify-center">
+                                                <Icon name="cart" className="w-6 h-6" />
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-white p-6 rounded-3xl border premium-shadow flex items-center justify-between">
+                                            <div className="leading-tight">
+                                                <p className="text-xs text-gray-400 font-semibold">Tổng sản phẩm hoạt động</p>
+                                                <h3 className="text-2xl font-extrabold text-gray-800 font-display mt-2">{stats.totalProducts}</h3>
+                                                <span className="text-[10px] text-gray-500 font-semibold bg-gray-100 px-2 py-0.5 rounded-full mt-1.5 inline-block">Đầy đủ các ngành hàng</span>
+                                            </div>
+                                            <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center">
+                                                <Icon name="package" className="w-6 h-6" />
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-white p-6 rounded-3xl border premium-shadow flex items-center justify-between">
+                                            <div className="leading-tight">
+                                                <p className="text-xs text-gray-400 font-semibold">Khách hàng thành viên</p>
+                                                <h3 className="text-2xl font-extrabold text-gray-800 font-display mt-2">{stats.totalCustomers}</h3>
+                                                <span className="text-[10px] text-emerald-500 font-bold bg-emerald-50 px-2 py-0.5 rounded-full mt-1.5 inline-block">+3 thành viên mới</span>
+                                            </div>
+                                            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-500 flex items-center justify-center">
+                                                <Icon name="users" className="w-6 h-6" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Charts and Log */}
+                                    <div className="grid grid-cols-3 gap-6">
+                                        {/* Chart */}
+                                        <div className="col-span-2 bg-white p-6 rounded-3xl border premium-shadow">
+                                            <h3 className="font-bold text-gray-800 mb-6">Biểu đồ doanh thu hàng tuần</h3>
+                                            <div className="h-64 flex items-end justify-between gap-6 px-4 border-b border-l pb-3">
+                                                {/* Simulated bars */}
+                                                {[
+                                                    { label: 'Thứ 2', val: 70, amount: '14,000,000đ' },
+                                                    { label: 'Thứ 3', val: 55, amount: '11,000,000đ' },
+                                                    { label: 'Thứ 4', val: 90, amount: '18,000,000đ' },
+                                                    { label: 'Thứ 5', val: 80, amount: '16,000,000đ' },
+                                                    { label: 'Thứ 6', val: 60, amount: '12,000,000đ' },
+                                                    { label: 'Thứ 7', val: 100, amount: '20,000,000đ' },
+                                                    { label: 'Chủ Nhật', val: 120, amount: '24,000,000đ' },
+                                                ].map((bar, i) => (
+                                                    <div key={i} className="flex-1 flex flex-col items-center group relative cursor-pointer">
+                                                        <div className="absolute bottom-full mb-2 bg-slate-900 text-white text-[10px] py-1 px-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity font-bold whitespace-nowrap z-10">
+                                                            {bar.amount}
+                                                        </div>
+                                                        <div className="w-full bg-gradient-to-t from-brand-blue to-blue-400 rounded-t-lg group-hover:brightness-110 transition-all" 
+                                                            style={{ height: `${bar.val * 1.5}px` }}></div>
+                                                        <span className="text-[10px] text-gray-400 font-bold mt-2">{bar.label}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* History log */}
+                                        <div className="bg-white p-6 rounded-3xl border premium-shadow flex flex-col">
+                                            <h3 className="font-bold text-gray-800 mb-4">Hoạt động gần đây</h3>
+                                            <div className="flex-1 space-y-4 overflow-y-auto max-h-64 pr-1 text-xs">
+                                                <div className="flex items-start gap-3 border-b pb-3">
+                                                    <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                                                        <Icon name="check" className="w-4 h-4" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-bold text-gray-800">Hóa đơn HD-928503 thành công</p>
+                                                        <span className="text-[10px] text-gray-400">Cách đây 2 phút · Thanh toán PayOS</span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-start gap-3 border-b pb-3">
+                                                    <div className="w-8 h-8 rounded-xl bg-blue-50 text-brand-blue flex items-center justify-center shrink-0">
+                                                        <Icon name="users" className="w-4 h-4" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-bold text-gray-800">Thành viên mới đăng ký</p>
+                                                        <span className="text-[10px] text-gray-400">Cách đây 15 phút · SĐT: 0987654321</span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-start gap-3 border-b pb-3">
+                                                    <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                                                        <Icon name="package" className="w-4 h-4" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-bold text-gray-800">Cập nhật kho sản phẩm</p>
+                                                        <span className="text-[10px] text-gray-400">Cách đây 1 giờ · Bánh mì tươi Kinh Đô +20</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* ── TAB: PRODUCTS ── */}
+                            {activeTab === 'products' && (
+                                <div className="bg-white rounded-3xl border premium-shadow p-6 space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="font-bold text-gray-800 text-base">Hệ thống kho hàng thực tế</h3>
+                                        <button onClick={() => setShowAddProductModal(true)}
+                                            className="px-4 py-2.5 bg-brand-blue text-white rounded-2xl font-bold hover:bg-brand-blue-dark transition-colors flex items-center gap-2">
+                                            <Icon name="plus" className="w-4 h-4" />
+                                            <span>Thêm sản phẩm</span>
+                                        </button>
+                                    </div>
+
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="border-b text-gray-400 text-xs font-bold uppercase bg-gray-50/50">
+                                                    <th className="p-4">Tên sản phẩm</th>
+                                                    <th className="p-4">Mã vạch</th>
+                                                    <th className="p-4">Danh mục</th>
+                                                    <th className="p-4">Đơn vị</th>
+                                                    <th className="p-4 text-right">Giá nhập</th>
+                                                    <th className="p-4 text-right">Giá bán</th>
+                                                    <th className="p-4 text-center">Tồn kho</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y text-xs">
+                                                {products.map(p => (
+                                                    <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
+                                                        <td className="p-4 font-bold text-gray-800">{p.name}</td>
+                                                        <td className="p-4 font-mono text-gray-500">{p.barcode}</td>
+                                                        <td className="p-4">
+                                                            <span className="px-2 py-0.5 bg-gray-100 rounded-full text-gray-600 font-semibold">{p.category}</span>
+                                                        </td>
+                                                        <td className="p-4">{p.unit}</td>
+                                                        <td className="p-4 text-right font-semibold text-gray-500">{p.costPrice.toLocaleString('vi-VN')}đ</td>
+                                                        <td className="p-4 text-right font-extrabold text-brand-blue">{p.price.toLocaleString('vi-VN')}đ</td>
+                                                        <td className="p-4 text-center">
+                                                            <span className={`font-bold px-3 py-1 rounded-full ${
+                                                                p.stock > 10 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'
+                                                            }`}>
+                                                                {p.stock}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* ── TAB: CUSTOMERS ── */}
+                            {activeTab === 'customers' && (
+                                <div className="bg-white rounded-3xl border premium-shadow p-6 space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="font-bold text-gray-800 text-base">Thành viên tích điểm</h3>
+                                        <button onClick={() => setShowAddCustomerModal(true)}
+                                            className="px-4 py-2.5 bg-brand-blue text-white rounded-2xl font-bold hover:bg-brand-blue-dark transition-colors flex items-center gap-2">
+                                            <Icon name="plus" className="w-4 h-4" />
+                                            <span>Thêm thành viên</span>
+                                        </button>
+                                    </div>
+
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="border-b text-gray-400 text-xs font-bold uppercase bg-gray-50/50">
+                                                    <th className="p-4">Họ và tên</th>
+                                                    <th className="p-4">Số điện thoại</th>
+                                                    <th className="p-4 text-center">Điểm tích lũy</th>
+                                                    <th className="p-4">Hạng thành viên</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y text-xs">
+                                                {customers.map(c => {
+                                                    let rank = 'Đồng';
+                                                    let rankClass = 'bg-gray-100 text-gray-600';
+                                                    if (c.points >= 150) {
+                                                        rank = 'Vàng';
+                                                        rankClass = 'bg-amber-100 text-amber-800 font-bold';
+                                                    } else if (c.points >= 50) {
+                                                        rank = 'Bạc';
+                                                        rankClass = 'bg-slate-200 text-slate-800 font-bold';
+                                                    }
+                                                    return (
+                                                        <tr key={c.id} className="hover:bg-gray-50/50 transition-colors">
+                                                            <td className="p-4 font-bold text-gray-800">{c.fullName}</td>
+                                                            <td className="p-4 font-mono text-gray-600">{c.phone}</td>
+                                                            <td className="p-4 text-center font-extrabold text-brand-blue">{c.points}</td>
+                                                            <td className="p-4">
+                                                                <span className={`px-3 py-1 rounded-full text-[11px] ${rankClass}`}>
+                                                                    {rank}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+
+                        </div>
+                    </main>
+
+                    {/* ── MODAL: CHECKOUT ── */}
+                    {showCheckoutModal && (
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-white rounded-3xl max-w-md w-full overflow-hidden premium-shadow border flex flex-col max-h-[90vh]">
+                                {/* Modal Header */}
+                                <div className="p-5 border-b bg-gray-50 flex justify-between items-center shrink-0">
+                                    <h3 className="font-bold text-gray-800">Thanh toán hóa đơn qua PayOS</h3>
+                                    {checkoutStep === 1 && (
+                                        <button onClick={() => setShowCheckoutModal(false)} className="text-gray-400 hover:text-gray-600">
+                                            <Icon name="x" className="w-5 h-5" />
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Modal Content */}
+                                <div className="p-6 overflow-y-auto flex-1 text-center space-y-4">
+                                    {checkoutStep === 1 ? (
+                                        <>
+                                            <p className="text-xs text-gray-500 font-medium">Quét mã VietQR dưới đây để thanh toán tự động qua PayOS</p>
+                                            
+                                            {/* QR Container */}
+                                            <div className="p-4 border bg-gray-50 rounded-2xl inline-block">
+                                                <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=payos-checkout-${currentReceiptNumber}-${finalTotal}`} 
+                                                    alt="VietQR PayOS" 
+                                                    className="w-48 h-48 mx-auto" />
+                                            </div>
+
+                                            {/* Order Details */}
+                                            <div className="text-left bg-gray-50 border rounded-2xl p-4 space-y-2 text-xs">
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-400">Mã hóa đơn:</span>
+                                                    <span className="font-bold text-gray-800">{currentReceiptNumber}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-400">Khách hàng:</span>
+                                                    <span className="font-bold text-gray-800">{selectedCustomer ? selectedCustomer.fullName : 'Vãng lai'}</span>
+                                                </div>
+                                                <div className="flex justify-between border-t border-dashed pt-2 font-bold text-sm">
+                                                    <span className="text-gray-800">Cần thanh toán:</span>
+                                                    <span className="text-brand-blue">{finalTotal.toLocaleString('vi-VN')}đ</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Buttons */}
+                                            <button onClick={confirmPayment} disabled={isCheckingOut}
+                                                className="w-full py-3.5 bg-brand-blue text-white rounded-2xl font-bold hover:bg-brand-blue-dark active:scale-[0.99] transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+                                                {isCheckingOut ? (
+                                                    <>
+                                                        <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin"></span>
+                                                        <span>Đang xử lý giao dịch...</span>
+                                                    </>
+                                                ) : (
+                                                    <span>Xác nhận đã chuyển khoản</span>
+                                                )}
+                                            </button>
+                                        </>
+                                    ) : (
+                                        // STEP 2: PRINT RECEIPT
+                                        <div className="space-y-4">
+                                            <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center mx-auto">
+                                                <Icon name="check" className="w-6 h-6" />
+                                            </div>
+                                            <div>
+                                                <h4 className="font-bold text-gray-900">Thanh toán hoàn tất!</h4>
+                                                <p className="text-xs text-gray-400">Hóa đơn đã được ghi nhận trên cơ sở dữ liệu</p>
+                                            </div>
+
+                                            {/* Simulated paper receipt */}
+                                            <div className="text-left bg-amber-50/40 border border-amber-200/50 p-6 rounded-2xl text-[11px] font-mono leading-relaxed max-w-sm mx-auto shadow-sm">
+                                                <div className="text-center border-b border-dashed pb-3 space-y-1">
+                                                    <h5 className="font-bold font-sans text-sm">MINIMART VIỆT NAM</h5>
+                                                    <p>ĐC: Quận 1, Tp. Hồ Chí Minh</p>
+                                                    <p>SĐT: 1900-XXXX</p>
+                                                </div>
+                                                
+                                                <div className="py-3 border-b border-dashed space-y-1">
+                                                    <p>Mã HĐ: {currentReceiptNumber}</p>
+                                                    <p>Ngày: {new Date().toLocaleDateString('vi-VN')} {new Date().toLocaleTimeString('vi-VN')}</p>
+                                                    <p>Thu ngân: Quản lý cửa hàng</p>
+                                                    <p>Khách hàng: {selectedCustomer ? selectedCustomer.fullName : 'Vãng lai'}</p>
+                                                </div>
+
+                                                <table className="w-full py-3 border-b border-dashed text-left">
+                                                    <thead>
+                                                        <tr className="font-bold">
+                                                            <th className="pb-1">Tên SP</th>
+                                                            <th className="pb-1 text-center">SL</th>
+                                                            <th className="pb-1 text-right">T.Tiền</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {cart.map(item => (
+                                                            <tr key={item.product.id}>
+                                                                <td className="py-1 max-w-[120px] truncate">{item.product.name}</td>
+                                                                <td className="py-1 text-center">{item.quantity}</td>
+                                                                <td className="py-1 text-right">{(item.product.price * item.quantity).toLocaleString('vi-VN')}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+
+                                                <div className="py-3 space-y-1 text-right">
+                                                    <p>Tạm tính: {cartTotal.toLocaleString('vi-VN')}đ</p>
+                                                    {discountPercent > 0 && <p>Giảm giá ({discountPercent}%): -{((cartTotal * discountPercent)/100).toLocaleString('vi-VN')}đ</p>}
+                                                    <p className="font-bold text-xs border-t border-dashed pt-1 mt-1">Tổng cộng: {finalTotal.toLocaleString('vi-VN')}đ</p>
+                                                </div>
+
+                                                <div className="text-center border-t border-dashed pt-3 font-sans font-semibold text-gray-500">
+                                                    Cảm ơn quý khách. Hẹn gặp lại!
+                                                </div>
+                                            </div>
+
+                                            <button onClick={completeCheckout}
+                                                className="w-full py-3.5 bg-brand-blue text-white rounded-2xl font-bold hover:bg-brand-blue-dark transition-all">
+                                                Hoàn thành & In hóa đơn
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── MODAL: ADD PRODUCT ── */}
+                    {showAddProductModal && (
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-white rounded-3xl max-w-md w-full overflow-hidden premium-shadow border flex flex-col">
+                                <div className="p-5 border-b bg-gray-50 flex justify-between items-center">
+                                    <h3 className="font-bold text-gray-800">Thêm sản phẩm mới vào kho</h3>
+                                    <button onClick={() => setShowAddProductModal(false)} className="text-gray-400 hover:text-gray-600">
+                                        <Icon name="x" className="w-5 h-5" />
+                                    </button>
+                                </div>
+                                <form onSubmit={handleAddProductSubmit} className="p-6 space-y-4">
+                                    <div>
+                                        <label className="text-[11px] font-bold text-gray-500 block mb-1">Tên sản phẩm *</label>
+                                        <input required value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})}
+                                            placeholder="Sữa tươi Vinamilk 180ml" className="w-full border rounded-xl px-3 py-2 text-xs font-semibold" />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-[11px] font-bold text-gray-500 block mb-1">Mã vạch (Barcode) *</label>
+                                            <input required value={newProduct.barcode} onChange={e => setNewProduct({...newProduct, barcode: e.target.value.replace(/\D/g, '')})}
+                                                placeholder="893..." className="w-full border rounded-xl px-3 py-2 text-xs font-semibold" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[11px] font-bold text-gray-500 block mb-1">Ngành hàng</label>
+                                            <select value={newProduct.category} onChange={e => setNewProduct({...newProduct, category: e.target.value})}
+                                                className="w-full border rounded-xl px-3 py-2 text-xs font-semibold">
+                                                <option>Đồ uống</option>
+                                                <option>Thực phẩm</option>
+                                                <option>Đồ ăn vặt</option>
+                                                <option>Hóa phẩm</option>
+                                                <option>Gia vị</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <div>
+                                            <label className="text-[11px] font-bold text-gray-500 block mb-1">Giá nhập *</label>
+                                            <input required type="number" value={newProduct.costPrice} onChange={e => setNewProduct({...newProduct, costPrice: e.target.value})}
+                                                placeholder="7000" className="w-full border rounded-xl px-3 py-2 text-xs font-semibold" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[11px] font-bold text-gray-500 block mb-1">Giá bán *</label>
+                                            <input required type="number" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})}
+                                                placeholder="10000" className="w-full border rounded-xl px-3 py-2 text-xs font-semibold" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[11px] font-bold text-gray-500 block mb-1">Tồn kho *</label>
+                                            <input required type="number" value={newProduct.stock} onChange={e => setNewProduct({...newProduct, stock: e.target.value})}
+                                                placeholder="100" className="w-full border rounded-xl px-3 py-2 text-xs font-semibold" />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-[11px] font-bold text-gray-500 block mb-1">Đơn vị tính</label>
+                                            <input value={newProduct.unit} onChange={e => setNewProduct({...newProduct, unit: e.target.value})}
+                                                placeholder="Hộp, Lon, Gói..." className="w-full border rounded-xl px-3 py-2 text-xs font-semibold" />
+                                        </div>
+                                    </div>
+                                    <button type="submit"
+                                        className="w-full py-3 bg-brand-blue text-white rounded-2xl font-bold hover:bg-brand-blue-dark transition-all mt-4">
+                                        Lưu sản phẩm
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── MODAL: ADD CUSTOMER ── */}
+                    {showAddCustomerModal && (
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-white rounded-3xl max-w-sm w-full overflow-hidden premium-shadow border flex flex-col">
+                                <div className="p-5 border-b bg-gray-50 flex justify-between items-center">
+                                    <h3 className="font-bold text-gray-800">Đăng ký thành viên mới</h3>
+                                    <button onClick={() => setShowAddCustomerModal(false)} className="text-gray-400 hover:text-gray-600">
+                                        <Icon name="x" className="w-5 h-5" />
+                                    </button>
+                                </div>
+                                <form onSubmit={handleAddCustomerSubmit} className="p-6 space-y-4">
+                                    <div>
+                                        <label className="text-[11px] font-bold text-gray-500 block mb-1">Số điện thoại *</label>
+                                        <input required value={newCustomer.phone} onChange={e => setNewCustomer({...newCustomer, phone: e.target.value.replace(/\D/g, '').slice(0, 11)})}
+                                            type="tel" placeholder="09xxxxxxxx" className="w-full border rounded-xl px-3 py-2 text-xs font-semibold" />
+                                    </div>
+                                    <div>
+                                        <label className="text-[11px] font-bold text-gray-500 block mb-1">Họ và tên khách hàng *</label>
+                                        <input required value={newCustomer.fullName} onChange={e => setNewCustomer({...newCustomer, fullName: e.target.value})}
+                                            placeholder="Nguyễn Văn A" className="w-full border rounded-xl px-3 py-2 text-xs font-semibold" />
+                                    </div>
+                                    <div>
+                                        <label className="text-[11px] font-bold text-gray-500 block mb-1">Điểm bắt đầu</label>
+                                        <input type="number" value={newCustomer.points} onChange={e => setNewCustomer({...newCustomer, points: e.target.value})}
+                                            placeholder="0" className="w-full border rounded-xl px-3 py-2 text-xs font-semibold" />
+                                    </div>
+                                    <button type="submit"
+                                        className="w-full py-3 bg-brand-blue text-white rounded-2xl font-bold hover:bg-brand-blue-dark transition-all mt-4">
+                                        Lưu thành viên
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                </div>
+            );
+        }
+
+        const rootElement = document.getElementById('root');
+        const root = ReactDOM.createRoot(rootElement);
+        root.render(<App />);
+    </script>
+</body>
+</html>
